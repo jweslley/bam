@@ -27,3 +27,7 @@
 * Package installers
 * Process management
 * Docs
+
+
+[![Bitdeli Badge](https://d2weczhvl823v0.cloudfront.net/jweslley/bam/trend.png)](https://bitdeli.com/free "Bitdeli Badge")
+
