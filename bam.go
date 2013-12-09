@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"os"
+	"regexp"
 	"strings"
 )
 
@@ -18,6 +19,8 @@ var (
 	tld        = flag.String("tld", getValue("LOCALTLD", "app"),
 		"Local top-level domain. Defaults to environment variable LOCALTLD")
 )
+
+var xipio = regexp.MustCompile("^(.*?)\\.?\\d+\\.\\d+\\.\\d+\\.\\d+\\.xip\\.io")
 
 func getValue(key, defaultValue string) string {
 	if value := os.Getenv(key); value == "" {
@@ -34,7 +37,12 @@ type App struct {
 
 func (a *App) Match(host, tld string) bool {
 	apphost := a.Name + "." + tld
-	return apphost == host || strings.HasSuffix(host, "."+apphost)
+	return apphost == host || strings.HasSuffix(host, "."+apphost) || a.isXipDomain(host)
+}
+
+func (a *App) isXipDomain(host string) bool {
+	name := xipio.ReplaceAllString(host, "$1")
+	return a.Name == name || strings.HasSuffix(name, "."+a.Name)
 }
 
 func (a *App) Host() string {

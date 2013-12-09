@@ -25,9 +25,7 @@
 
 ## TODO list
 
-* xip.io domains
 * SSL support
-* iptables rules
 * OSX support
 * Start scripts
 * Package installers
