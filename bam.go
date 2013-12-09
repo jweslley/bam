@@ -14,7 +14,7 @@ import (
 
 var (
 	configPath = flag.String("config", os.Getenv("HOME")+"/.bam/apps.json", "Config file")
-	httpAddr   = flag.String("http", ":9000", "HTTP service address")
+	httpAddr   = flag.String("http", ":42042", "HTTP service address")
 	tld        = flag.String("tld", getValue("LOCALTLD", "app"),
 		"Local top-level domain. Defaults to environment variable LOCALTLD")
 )

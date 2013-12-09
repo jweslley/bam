@@ -17,6 +17,12 @@
     ]
 
 
+## Usage
+
+### Linux
+
+    sudo iptables-restore < iptables.rules
+
 ## TODO list
 
 * xip.io domains
