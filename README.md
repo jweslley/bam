@@ -5,16 +5,11 @@
 
 ## Configuration file syntax
 
-    [
-      {
-        "name": "monit",
-        "port": 2812
-      },
-      {
-        "name": "godoc",
-        "port": 3000
-      }
-    ]
+    {
+      "monit": 2812,
+      "ships": 8080,
+      "godoc": 6000
+    }
 
 
 ## Usage
