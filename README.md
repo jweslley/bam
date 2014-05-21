@@ -1,5 +1,7 @@
 # BAM!!!
 
+[![Travis](https://api.travis-ci.org/jweslley/bam.png)](http://travis-ci.org/jweslley/bam)
+
 **Work in progress!!**
 
 
