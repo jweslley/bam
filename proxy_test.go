@@ -6,8 +6,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"strconv"
-	"strings"
 	"testing"
 )
 
@@ -159,8 +157,7 @@ func getServerPort(t *testing.T, baseURL string) int {
 		t.Fatal(e)
 	}
 
-	s := strings.SplitN(url.Host, ":", 2)
-	port, err := strconv.Atoi(s[1])
+	port, err := AddrPort(url.Host)
 	if err != nil {
 		t.Fatal(err)
 	}
