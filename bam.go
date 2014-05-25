@@ -47,7 +47,15 @@ func main() {
 		servers = append(servers, NewServer(name, port))
 	}
 
+	cc := NewCommandCenter(*tld, servers...)
+	go func() {
+		log.Println("Starting CommandCenter")
+		log.Fatal(cc.Start())
+	}()
+
+	servers = append(servers, cc)
+
 	proxy := NewProxy(*tld, servers...)
-	log.Println("Starting HTTP server at", *httpAddr)
+	log.Println("Starting Proxy at", *httpAddr)
 	log.Fatal(http.ListenAndServe(*httpAddr, proxy))
 }
