@@ -22,12 +22,12 @@ func FreePort() (int, error) {
 	if err != nil {
 		return -1, err
 	}
+	defer l.Close()
 
 	port, err := AddrPort(l.Addr().String())
 	if err != nil {
 		return -1, err
 	}
 
-	l.Close()
 	return port, nil
 }
