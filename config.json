@@ -1,5 +1,10 @@
 {
-  "monit": 2812,
-  "ships": 8080,
-  "godoc": 6000
+  "apps_dir": "test",
+  "tld": "app",
+  "proxy_port": 42042,
+  "aliases": {
+    "monit": 2812,
+    "btsync": 8080,
+    "godoc": 6000
+  }
 }

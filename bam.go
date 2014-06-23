@@ -3,59 +3,66 @@ package main
 import (
 	"encoding/json"
 	"flag"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
-	"os"
 )
 
 var (
-	configPath = flag.String("config", os.Getenv("HOME")+"/.bam/apps.json", "Config file")
-	httpAddr   = flag.String("http", ":42042", "HTTP service address")
-	tld        = flag.String("tld", getValue("LOCALTLD", "local"),
-		"Local top-level domain. Defaults to environment variable LOCALTLD")
+	configPath = flag.String("config", "config.json", "Config file")
 )
 
-func getValue(key, defaultValue string) string {
-	if value := os.Getenv(key); value == "" {
-		return defaultValue
-	} else {
-		return value
-	}
+const defaultConfig = `{
+  "apps_dir": ".",
+  "tld": "app",
+  "proxy_port": 42042,
+  "aliases": { }
+}`
+
+type Config struct {
+	AppsDir   string         `json:"apps_dir"`
+	Aliases   map[string]int `json:"aliases"`
+	ProxyPort int            `json:"proxy_port"`
+	Tld       string         `json:"tld"`
 }
 
-func parseConfig(file string) map[string]int {
+func parseConfig(file string) *Config {
 	content, err := ioutil.ReadFile(file)
 	if err != nil {
 		log.Fatalln("[ERROR]", err)
 	}
 
-	s := make(map[string]int)
-	if err = json.Unmarshal(content, &s); err != nil {
+	c := &Config{}
+	if err = json.Unmarshal([]byte(defaultConfig), &c); err != nil {
+		log.Fatalln("[ERROR]", err)
+	}
+	if err = json.Unmarshal(content, &c); err != nil {
 		log.Fatalln("[ERROR]", err)
 	}
 
-	return s
+	return c
 }
 
 func main() {
 	flag.Parse()
 
-	s := parseConfig(*configPath)
+	c := parseConfig(*configPath)
 	servers := []Server{}
-	for name, port := range s {
+	for name, port := range c.Aliases {
 		servers = append(servers, NewServer(name, port))
 	}
 
-	cc := NewCommandCenter(*tld, servers...)
+	cc := NewCommandCenter(c.Tld, servers...)
 	go func() {
-		log.Println("Starting CommandCenter")
+		log.Printf("Starting CommandCenter at http://bam.%s\n", c.Tld)
 		log.Fatal(cc.Start())
 	}()
 
 	servers = append(servers, cc)
 
-	proxy := NewProxy(*tld, servers...)
-	log.Println("Starting Proxy at", *httpAddr)
-	log.Fatal(http.ListenAndServe(*httpAddr, proxy))
+	proxy := NewProxy(c.Tld, servers...)
+	proxyAddr := fmt.Sprintf(":%d", c.ProxyPort)
+	log.Println("Starting Proxy at", proxyAddr)
+	log.Fatal(http.ListenAndServe(proxyAddr, proxy))
 }

@@ -5,13 +5,10 @@
 **Work in progress!!**
 
 
-## Configuration file syntax
+## Installation
 
-    {
-      "monit": 2812,
-      "ships": 8080,
-      "godoc": 6000
-    }
+    git clone http://github.com/jweslley/bam
+    go build
 
 
 ## Usage
@@ -19,8 +16,10 @@
 ### Linux
 
     sudo iptables-restore < iptables.rules
+    bam
 
-## TODO list
+
+## Roadmap
 
 * SSL support
 * OSX support
