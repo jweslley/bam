@@ -14,11 +14,13 @@ func root(w http.ResponseWriter, req *http.Request) {
 		user = "world"
 	}
 
+	log.Printf("[ping] root: %s\n", user)
 	w.Header().Set("Content-Type", "text/html")
 	fmt.Fprintf(w, "Hello %s<br><a href='/ping'>Ping</a>", user)
 }
 
 func pong(w http.ResponseWriter, req *http.Request) {
+	log.Println("[ping] pong")
 	fmt.Fprint(w, "pong")
 }
 

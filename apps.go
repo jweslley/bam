@@ -46,12 +46,13 @@ func (a *App) buildProcess() procker.Process {
 	a.port = port
 	p := []procker.Process{}
 	for name, command := range a.processes {
+		prefix := fmt.Sprintf("[%s:%s] ", a.Name(), name)
 		process := procker.NewProcess(name,
 			command,
 			a.dir,
 			append(a.env, fmt.Sprintf("PORT=%d", port)),
-			os.Stdout,
-			os.Stderr)
+			procker.NewPrefixedWriter(os.Stdout, prefix),
+			procker.NewPrefixedWriter(os.Stderr, prefix))
 		p = append(p, process)
 	}
 	return procker.NewProcessSet(p...)

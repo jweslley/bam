@@ -48,20 +48,14 @@ func main() {
 	flag.Parse()
 
 	c := parseConfig(*configPath)
-	servers := []Server{}
-	for name, port := range c.Aliases {
-		servers = append(servers, NewServer(name, port))
-	}
 
-	cc := NewCommandCenter(c.Tld, servers...)
+	cc := NewCommandCenter(c.Tld, c.AppsDir, c.Aliases)
 	go func() {
 		log.Printf("Starting CommandCenter at http://bam.%s\n", c.Tld)
 		log.Fatal(cc.Start())
 	}()
 
-	servers = append(servers, cc)
-
-	proxy := NewProxy(c.Tld, servers...)
+	proxy := NewProxy(c.Tld, append(cc.servers, cc)...)
 	proxyAddr := fmt.Sprintf(":%d", c.ProxyPort)
 	log.Println("Starting Proxy at", proxyAddr)
 	log.Fatal(http.ListenAndServe(proxyAddr, proxy))
