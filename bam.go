@@ -16,6 +16,7 @@ var (
 const defaultConfig = `{
   "apps_dir": ".",
   "tld": "app",
+  "auto_start": true,
   "proxy_port": 42042,
   "aliases": { }
 }`
@@ -24,6 +25,7 @@ type Config struct {
 	AppsDir   string         `json:"apps_dir"`
 	Aliases   map[string]int `json:"aliases"`
 	ProxyPort int            `json:"proxy_port"`
+	AutoStart bool           `json:"auto_start"`
 	Tld       string         `json:"tld"`
 }
 
@@ -46,17 +48,17 @@ func fail(e error) {
 func main() {
 	flag.Parse()
 
-	c := parseConfig(*configPath)
+	cfg := parseConfig(*configPath)
 
 	log.SetPrefix("[bam] ")
-	cc := NewCommandCenter(c.Tld, c.AppsDir, c.Aliases)
+	cc := NewCommandCenter(cfg)
 	go func() {
-		log.Printf("Starting CommandCenter at http://bam.%s\n", c.Tld)
+		log.Printf("Starting CommandCenter at http://bam.%s\n", cfg.Tld)
 		fail(cc.Start())
 	}()
 
-	proxy := NewProxy(c.Tld, cc)
-	proxyAddr := fmt.Sprintf(":%d", c.ProxyPort)
+	proxy := NewProxy(cfg.Tld, cc)
+	proxyAddr := fmt.Sprintf(":%d", cfg.ProxyPort)
 	log.Println("Starting Proxy at", proxyAddr)
 	fail(http.ListenAndServe(proxyAddr, proxy))
 }

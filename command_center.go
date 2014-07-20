@@ -9,9 +9,10 @@ import (
 
 type CommandCenter struct {
 	server
-	tld     string
-	apps    []*App
-	servers []Server
+	tld       string
+	apps      []*App
+	servers   []Server
+	autoStart bool
 }
 
 var tmpl *template.Template
@@ -22,11 +23,12 @@ func init() {
 	tmpl = t
 }
 
-func NewCommandCenter(tld, appsDir string, aliases map[string]int) *CommandCenter {
-	cc := &CommandCenter{tld: tld}
+func NewCommandCenter(c *Config) *CommandCenter {
+	cc := &CommandCenter{tld: c.Tld}
 	cc.name = "bam"
-	cc.servers = createAliasedServers(aliases)
-	cc.apps = LoadApps(appsDir)
+	cc.servers = createAliasedServers(c.Aliases)
+	cc.apps = LoadApps(c.AppsDir)
+	cc.autoStart = c.AutoStart
 	return cc
 }
 
@@ -42,12 +44,11 @@ func (cc *CommandCenter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (cc *CommandCenter) Start() error {
 	port, _ := FreePort()
 	cc.port = port
-	go func() {
-		for _, app := range cc.apps {
-			log.Printf("Starting app %s\n", app.Name())
-			go app.Start()
-		}
-	}()
+	if cc.autoStart {
+		go func() {
+			cc.startApps()
+		}()
+	}
 	return http.ListenAndServe(fmt.Sprintf(":%d", cc.port), cc)
 }
 
@@ -58,6 +59,13 @@ func (cc *CommandCenter) List() []Server {
 		s = append(s, app)
 	}
 	return s
+}
+
+func (cc *CommandCenter) startApps() {
+	for _, app := range cc.apps {
+		log.Printf("Starting app %s\n", app.Name())
+		go app.Start()
+	}
 }
 
 func createAliasedServers(aliases map[string]int) []Server {

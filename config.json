@@ -2,6 +2,7 @@
   "apps_dir": "test",
   "tld": "app",
   "proxy_port": 42042,
+  "auto_start": true,
   "aliases": {
     "monit": 2812,
     "btsync": 8080,
