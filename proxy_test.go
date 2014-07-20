@@ -47,7 +47,7 @@ func TestProxyResolve(t *testing.T) {
 		NewServer("goapp", 8080),
 		NewServer("btsync", 8888),
 	}
-	p := NewProxy("local", servers...)
+	p := NewProxy("local", newServers(servers))
 
 	resolveCheck := func(name, host string) {
 		s, ok := p.Resolve(host)
@@ -107,7 +107,7 @@ func TestProxy(t *testing.T) {
 	foo := createServer("foo", fooStatus, fooContent)
 	defer foo.Close()
 
-	proxy := httptest.NewServer(NewProxy("local", servers...))
+	proxy := httptest.NewServer(NewProxy("local", newServers(servers)))
 	defer proxy.Close()
 
 	requestCheck := func(host string, expectedStatus int, expectedContent string) {
@@ -162,4 +162,16 @@ func getServerPort(t *testing.T, baseURL string) int {
 		t.Fatal(err)
 	}
 	return port
+}
+
+type servers struct {
+	servers []Server
+}
+
+func (s *servers) List() []Server {
+	return s.servers
+}
+
+func newServers(s []Server) Servers {
+	return &servers{s}
 }

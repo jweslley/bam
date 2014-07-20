@@ -55,7 +55,7 @@ func main() {
 		log.Fatal(cc.Start())
 	}()
 
-	proxy := NewProxy(c.Tld, append(cc.servers, cc)...)
+	proxy := NewProxy(c.Tld, cc)
 	proxyAddr := fmt.Sprintf(":%d", c.ProxyPort)
 	log.Println("Starting Proxy at", proxyAddr)
 	log.Fatal(http.ListenAndServe(proxyAddr, proxy))

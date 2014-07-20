@@ -45,6 +45,10 @@ func (cc *CommandCenter) Start() error {
 	return http.ListenAndServe(fmt.Sprintf(":%d", cc.port), cc)
 }
 
+func (cc *CommandCenter) List() []Server {
+	return cc.servers
+}
+
 func createServers(aliases map[string]int) []Server {
 	servers := []Server{}
 	for name, port := range aliases {

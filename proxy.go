@@ -17,17 +17,22 @@ type Server interface {
 	Port() int
 }
 
+// Servers provides a list of available servers.
+type Servers interface {
+	List() []Server
+}
+
 // Proxy is a ReverseProxy that takes an incoming request and
 // sends it to one of the known servers based on server's name,
 // after proxying the response back to the client.
 type Proxy struct {
 	httputil.ReverseProxy
-	servers []Server
+	servers Servers
 	tld     string
 }
 
 // NewProxy returns a new Proxy.
-func NewProxy(tld string, s ...Server) *Proxy {
+func NewProxy(tld string, s Servers) *Proxy {
 	p := &Proxy{tld: tld, servers: s}
 	p.Director = func(req *http.Request) {
 		req.URL.Scheme = "http"
@@ -44,7 +49,7 @@ func NewProxy(tld string, s ...Server) *Proxy {
 // Resolve finds a Server matching the given host.
 // Return false, if any Server matches host.
 func (p *Proxy) Resolve(host string) (Server, bool) {
-	for _, s := range p.servers {
+	for _, s := range p.servers.List() {
 		if p.match(s, host) {
 			return s, true
 		}
