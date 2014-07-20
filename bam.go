@@ -29,19 +29,18 @@ type Config struct {
 
 func parseConfig(file string) *Config {
 	content, err := ioutil.ReadFile(file)
-	if err != nil {
-		log.Fatalln("[ERROR]", err)
-	}
+	fail(err)
 
 	c := &Config{}
-	if err = json.Unmarshal([]byte(defaultConfig), &c); err != nil {
-		log.Fatalln("[ERROR]", err)
-	}
-	if err = json.Unmarshal(content, &c); err != nil {
-		log.Fatalln("[ERROR]", err)
-	}
-
+	fail(json.Unmarshal([]byte(defaultConfig), &c))
+	fail(json.Unmarshal(content, &c))
 	return c
+}
+
+func fail(e error) {
+	if e != nil {
+		log.Fatalln("ERROR ", e)
+	}
 }
 
 func main() {
@@ -49,14 +48,15 @@ func main() {
 
 	c := parseConfig(*configPath)
 
+	log.SetPrefix("[bam] ")
 	cc := NewCommandCenter(c.Tld, c.AppsDir, c.Aliases)
 	go func() {
 		log.Printf("Starting CommandCenter at http://bam.%s\n", c.Tld)
-		log.Fatal(cc.Start())
+		fail(cc.Start())
 	}()
 
 	proxy := NewProxy(c.Tld, cc)
 	proxyAddr := fmt.Sprintf(":%d", c.ProxyPort)
 	log.Println("Starting Proxy at", proxyAddr)
-	log.Fatal(http.ListenAndServe(proxyAddr, proxy))
+	fail(http.ListenAndServe(proxyAddr, proxy))
 }

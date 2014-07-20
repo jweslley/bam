@@ -40,7 +40,7 @@ func NewProxy(tld string, s Servers) *Proxy {
 		if found {
 			req.URL.Host = fmt.Sprint("127.0.0.1:", server.Port())
 		} else {
-			log.Printf("bam: [WARN] No server found for host %s\n", req.Host)
+			log.Printf("WARN No server found for host %s\n", req.Host)
 		}
 	}
 	return p

@@ -38,7 +38,7 @@ func (cc *CommandCenter) Start() error {
 	cc.port = port
 	go func() {
 		for _, app := range cc.apps {
-			log.Printf("starting app at cc %s", app.Name())
+			log.Printf("Starting app %s\n", app.Name())
 			go app.Start()
 		}
 	}()

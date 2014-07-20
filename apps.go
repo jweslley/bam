@@ -64,7 +64,7 @@ func LoadApps(dir string) []*App {
 	for _, p := range procfiles {
 		app, err := newApp(p)
 		if err != nil {
-			log.Printf("bam: Unable to load application %s. Error: %s\n", p, err.Error())
+			log.Printf("Unable to load application %s. Error: %s\n", p, err.Error())
 		} else {
 			apps = append(apps, app)
 		}
@@ -75,7 +75,7 @@ func LoadApps(dir string) []*App {
 func newApp(procfile string) (*App, error) {
 	processes, err := parseProfile(procfile)
 	if err != nil {
-		log.Printf("bam: Unable to load Procfile %s: %s", procfile, err)
+		log.Printf("Unable to load Procfile %s: %s\n", procfile, err)
 		return nil, err
 	}
 
@@ -84,7 +84,7 @@ func newApp(procfile string) (*App, error) {
 	envFile := path.Join(dir, ".env")
 	env, err := parseEnv(envFile)
 	if err != nil {
-		log.Printf("bam: Unable to load env file %s: %s\n", envFile, err)
+		log.Printf("Unable to load env file %s: %s\n", envFile, err)
 		env = []string{}
 	}
 
