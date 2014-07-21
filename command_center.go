@@ -35,8 +35,9 @@ func NewCommandCenter(c *Config) *CommandCenter {
 func (cc *CommandCenter) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Add("Content-Type", "text/html")
 	data := map[string]interface{}{
-		"Tld":     cc.tld,
-		"Servers": cc.List(),
+		"Tld":            cc.tld,
+		"aliasedServers": cc.servers,
+		"apps":           cc.apps,
 	}
 	tmpl.Execute(w, data)
 }
@@ -112,12 +113,25 @@ const baseHTML = `
     </style>
   </head>
   <body>
+		{{$tld := .Tld}}
     <div id="container">
-      <h1>Applications</h1>
+      <h1>BAM!!!</h1>
+      <h2>Aliased servers</h2>
       <ul>
-				{{$tld := .Tld}}
-				{{range .Servers}}
+				{{range .aliasedServers}}
 					<li><a href="http://{{.Name}}.{{$tld}}">{{.Name}}</a></li>
+				{{end}}
+      </ul>
+      <h2>Applications</h2>
+      <ul>
+				{{range .apps}}
+					{{ if .Started}}
+						<li class="green">
+					{{ else }}
+						<li class="red">
+					{{ end }}
+						<a href="http://{{.Name}}.{{$tld}}">{{.Name}}</a>
+					</li>
 				{{end}}
       </ul>
     </div>
