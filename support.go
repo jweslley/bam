@@ -3,13 +3,16 @@ package main
 import (
 	"net"
 	"strconv"
-	"strings"
 )
 
 // AddrPort returns the port from a network end point address.
 func AddrPort(addr string) (int, error) {
-	s := strings.SplitN(addr, ":", 2)
-	port, err := strconv.Atoi(s[1])
+	_, portStr, e := net.SplitHostPort(addr)
+	if e != nil {
+		return -1, e
+	}
+
+	port, err := strconv.Atoi(portStr)
 	if err != nil {
 		return -1, err
 	}
