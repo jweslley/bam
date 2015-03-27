@@ -32,13 +32,13 @@ func (a *App) Stop() error {
 		return fmt.Errorf("bam: %s not started", a.Name())
 	}
 
-	err := a.process.Kill()
+	err := a.process.Stop(1000)
 	a.process = nil
 	return err
 }
 
 func (a *App) Started() bool {
-	return a.process != nil && a.process.Started()
+	return a.process != nil && a.process.Running()
 }
 
 func (a *App) buildProcess() procker.Process {
@@ -47,7 +47,7 @@ func (a *App) buildProcess() procker.Process {
 	p := []procker.Process{}
 	for name, command := range a.processes {
 		prefix := fmt.Sprintf("[%s:%s] ", a.Name(), name)
-		process := procker.NewProcess(name,
+		process := procker.NewProcess(
 			command,
 			a.dir,
 			append(a.env, fmt.Sprintf("PORT=%d", port)),
@@ -55,7 +55,7 @@ func (a *App) buildProcess() procker.Process {
 			procker.NewPrefixedWriter(os.Stderr, prefix))
 		p = append(p, process)
 	}
-	return procker.NewProcessSet(p...)
+	return procker.NewProcessGroup(p...)
 }
 
 func LoadApps(dir string) []*App {
