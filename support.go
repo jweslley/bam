@@ -9,12 +9,12 @@ import (
 func AddrPort(addr string) (int, error) {
 	_, portStr, e := net.SplitHostPort(addr)
 	if e != nil {
-		return -1, e
+		return 0, e
 	}
 
 	port, err := strconv.Atoi(portStr)
 	if err != nil {
-		return -1, err
+		return 0, err
 	}
 	return port, nil
 }
