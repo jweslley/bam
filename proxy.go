@@ -36,10 +36,12 @@ func NewProxy(tld string, s Servers) *Proxy {
 	p := &Proxy{tld: tld, servers: s}
 	p.Director = func(req *http.Request) {
 		req.URL.Scheme = "http"
-		server, found := p.Resolve(req.Host)
+		server, found := p.resolve(req.Host)
 		if found {
+			// FIXME use localhost
 			req.URL.Host = fmt.Sprint("127.0.0.1:", server.Port())
 		} else {
+			// FIXME redirect to bam server to show an error page
 			log.Printf("WARN No server found for host %s\n", req.Host)
 		}
 	}
@@ -48,7 +50,7 @@ func NewProxy(tld string, s Servers) *Proxy {
 
 // Resolve finds a Server matching the given host.
 // Return false, if any Server matches host.
-func (p *Proxy) Resolve(host string) (Server, bool) {
+func (p *Proxy) resolve(host string) (Server, bool) {
 	for _, s := range p.servers.List() {
 		if p.match(s, host) {
 			return s, true

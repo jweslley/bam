@@ -50,7 +50,7 @@ func TestProxyResolve(t *testing.T) {
 	p := NewProxy("local", newServers(servers))
 
 	resolveCheck := func(name, host string) {
-		s, ok := p.Resolve(host)
+		s, ok := p.resolve(host)
 		if !ok {
 			t.Errorf("cant resolve %s", host)
 		}
@@ -76,7 +76,7 @@ func TestProxyResolve(t *testing.T) {
 	resolveCheck("btsync", "p.p.btsync.192.20.1.42.xip.io")
 
 	unresolvedCheck := func(host string) {
-		s, ok := p.Resolve(host)
+		s, ok := p.resolve(host)
 		if ok {
 			t.Errorf("server '%s' was found for host '%s'", s.Name(), host)
 		}
