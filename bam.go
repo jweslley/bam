@@ -1,41 +1,56 @@
 package main
 
 import (
-	"encoding/json"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net/http"
+
+	"github.com/BurntSushi/toml"
 )
 
 var (
-	configPath = flag.String("config", "config.json", "Config file")
+	configPath = flag.String("config", "", "Config file")
 )
 
-const defaultConfig = `{
-  "apps_dir": ".",
-  "tld": "app",
-  "auto_start": true,
-  "proxy_port": 42042,
-  "aliases": { }
-}`
+const defaultConfig = `
+# apps_dir is the path where Procfile-based applications will be searched.
+apps_dir = "."
+
+# tld is the top-level domain for local applications.
+tld = "app"
+
+# Automatically starts all applications found on startup if set as true.
+auto_start = false
+
+# proxy_port is the port where all :80 connections will be forwarded to before reaching any of the applications.
+proxy_port = 42042
+
+# aliases maps names for local ports used by applications not managed by bam.
+#[aliases]
+#btsync = 8080
+#transmission = 9091
+`
 
 type Config struct {
-	AppsDir   string         `json:"apps_dir"`
-	Aliases   map[string]int `json:"aliases"`
-	ProxyPort int            `json:"proxy_port"`
-	AutoStart bool           `json:"auto_start"`
-	Tld       string         `json:"tld"`
+	AppsDir   string         `toml:"apps_dir"`
+	Tld       string         `toml:"tld"`
+	AutoStart bool           `toml:"auto_start"`
+	ProxyPort int            `toml:"proxy_port"`
+	Aliases   map[string]int `toml:"aliases"`
 }
 
 func parseConfig(file string) *Config {
-	content, err := ioutil.ReadFile(file)
+	c := &Config{}
+
+	_, err := toml.Decode(defaultConfig, &c)
 	fail(err)
 
-	c := &Config{}
-	fail(json.Unmarshal([]byte(defaultConfig), &c))
-	fail(json.Unmarshal(content, &c))
+	if file != "" {
+		_, err = toml.DecodeFile(file, &c)
+		fail(err)
+	}
+
 	return c
 }
 
