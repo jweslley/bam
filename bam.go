@@ -11,6 +11,7 @@ import (
 
 var (
 	configPath     = flag.String("config", "", "Use a configuration file")
+	configure      = flag.Bool("configure", false, "Generate platform-specific file(s) and prints instructions in order to get things running. If you are using a custom config file you also must use -config option.")
 	dumpConfigFile = flag.Bool("dump-sample-config", false, "Print a sample configuration file")
 )
 
@@ -51,6 +52,11 @@ func main() {
 	}
 
 	cfg := parseConfig(*configPath)
+
+	if *configure {
+		configuration(cfg)
+		return
+	}
 
 	log.SetPrefix("[bam] ")
 	cc := NewCommandCenter(cfg)
