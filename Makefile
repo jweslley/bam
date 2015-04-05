@@ -1,8 +1,13 @@
 all: tests
 
-tests:
+deps:
 	go get github.com/BurntSushi/toml
 	go get github.com/jweslley/procker
+
+build: deps
+	go build
+
+tests: deps
 	go build -x -o ./test/fileserver/fileserver ./test/fileserver
 	go build -x -o ./test/ping/ping ./test/ping
 	go test -v
