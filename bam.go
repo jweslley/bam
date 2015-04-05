@@ -10,27 +10,9 @@ import (
 )
 
 var (
-	configPath = flag.String("config", "", "Config file")
+	configPath     = flag.String("config", "", "Use a configuration file")
+	dumpConfigFile = flag.Bool("dump-sample-config", false, "Print a sample configuration file")
 )
-
-const defaultConfig = `
-# apps_dir is the path where Procfile-based applications will be searched.
-apps_dir = "."
-
-# tld is the top-level domain for local applications.
-tld = "app"
-
-# Automatically starts all applications found on startup if set as true.
-auto_start = false
-
-# proxy_port is the port where all :80 connections will be forwarded to before reaching any of the applications.
-proxy_port = 42042
-
-# aliases maps names for local ports used by applications not managed by bam.
-#[aliases]
-#btsync = 8080
-#transmission = 9091
-`
 
 type Config struct {
 	AppsDir   string         `toml:"apps_dir"`
@@ -63,6 +45,11 @@ func fail(e error) {
 func main() {
 	flag.Parse()
 
+	if *dumpConfigFile {
+		fmt.Print(defaultConfig)
+		return
+	}
+
 	cfg := parseConfig(*configPath)
 
 	log.SetPrefix("[bam] ")
@@ -77,3 +64,22 @@ func main() {
 	log.Println("Starting Proxy at", proxyAddr)
 	fail(http.ListenAndServe(proxyAddr, proxy))
 }
+
+const defaultConfig = `
+# apps_dir is the path where Procfile-based applications will be searched.
+apps_dir = "."
+
+# tld is the top-level domain for local applications.
+tld = "app"
+
+# Automatically starts all applications found on startup if set as true.
+auto_start = false
+
+# proxy_port is the port where all :80 connections will be forwarded to before reaching any of the applications.
+proxy_port = 42042
+
+# aliases maps names for local ports used by applications not managed by bam.
+#[aliases]
+#btsync = 8080
+#transmission = 9091
+`
