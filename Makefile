@@ -1,6 +1,7 @@
 all: tests
 
 tests:
+	go get github.com/BurntSushi/toml
 	go get github.com/jweslley/procker
 	go build -x -o ./test/fileserver/fileserver ./test/fileserver
 	go build -x -o ./test/ping/ping ./test/ping
