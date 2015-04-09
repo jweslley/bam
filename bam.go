@@ -5,14 +5,16 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"text/template"
 
 	"github.com/BurntSushi/toml"
 )
 
+const programVersion = "0.0.1-alpha"
+
 var (
-	configPath     = flag.String("config", "", "Use a configuration file")
-	configure      = flag.Bool("configure", false, "Generate platform-specific file(s) and prints instructions in order to get things running. If you are using a custom config file you also must use -config option.")
-	dumpConfigFile = flag.Bool("dump-sample-config", false, "Print a sample configuration file")
+	configTemplates = make(map[string]string)
 )
 
 type Config struct {
@@ -43,18 +45,39 @@ func fail(e error) {
 	}
 }
 
-func main() {
-	flag.Parse()
-
-	if *dumpConfigFile {
-		fmt.Print(defaultConfig)
-		return
+func generate(name string, c *Config) {
+	tpl, ok := configTemplates[name]
+	if !ok {
+		fmt.Fprintf(os.Stderr, configTemplates["help"])
+		os.Exit(1)
 	}
 
-	cfg := parseConfig(*configPath)
+	template.Must(template.New(name).Parse(tpl)).Execute(os.Stdout, c)
+}
 
-	if *configure {
-		configuration(cfg)
+func usage() {
+	fmt.Fprintf(os.Stderr, "Usage: %s [OPTION]...\n", os.Args[0])
+	fmt.Fprintf(os.Stderr, "A web server for developers.\n\n")
+	flag.PrintDefaults()
+}
+
+func main() {
+	versionFlag := flag.Bool("v", false, "print version information and exit")
+	configFlag := flag.String("config", "", "use a configuration file")
+	generateFlag := flag.String("generate", "", "generate configuration file(s)")
+
+	flag.Usage = usage
+	flag.Parse()
+
+	if *versionFlag {
+		fmt.Printf("bam %s\n", programVersion)
+		os.Exit(0)
+	}
+
+	cfg := parseConfig(*configFlag)
+
+	if *generateFlag != "" {
+		generate(*generateFlag, cfg)
 		return
 	}
 
@@ -71,7 +94,8 @@ func main() {
 	fail(http.ListenAndServe(proxyAddr, proxy))
 }
 
-const defaultConfig = `
+const defaultConfig = `# BAM! configuration file
+
 # apps_dir is the path where Procfile-based applications will be searched.
 apps_dir = "."
 
