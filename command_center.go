@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"path/filepath"
 	"text/template"
 )
 
@@ -11,7 +12,6 @@ type CommandCenter struct {
 	server
 	tld       string
 	apps      []App
-	servers   []Server
 	autoStart bool
 }
 
@@ -26,15 +26,14 @@ func init() {
 func NewCommandCenter(c *Config) *CommandCenter {
 	cc := &CommandCenter{tld: c.Tld}
 	cc.name = "bam"
-	cc.servers = createAliasedServers(c.Aliases)
-	cc.apps = LoadApps(c.AppsDir)
+	cc.apps = []App{}
+	cc.loadApps(c)
 	cc.autoStart = c.AutoStart
 	return cc
 }
 
 func (cc *CommandCenter) List() []Server {
-	s := cc.servers
-	s = append(s, cc)
+	s := []Server{cc}
 	for _, app := range cc.apps {
 		s = append(s, app)
 	}
@@ -70,9 +69,8 @@ func (cc *CommandCenter) createHandler() http.Handler {
 func (cc *CommandCenter) index(w http.ResponseWriter, r *http.Request) {
 	w.Header().Add("Content-Type", "text/html")
 	data := map[string]interface{}{
-		"Tld":            cc.tld,
-		"aliasedServers": cc.servers,
-		"apps":           cc.apps,
+		"Tld":  cc.tld,
+		"apps": cc.apps,
 	}
 	tmpl.Execute(w, data)
 }
@@ -102,12 +100,27 @@ func (cc *CommandCenter) action(w http.ResponseWriter, r *http.Request, action f
 	http.Redirect(w, r, "/", 302)
 }
 
-func createAliasedServers(aliases map[string]int) []Server {
-	servers := []Server{}
+func (cc *CommandCenter) loadApps(c *Config) {
+	cc.loadAliasApps(c.Aliases)
+	cc.loadProcessApps(c.AppsDir)
+}
+
+func (cc *CommandCenter) loadAliasApps(aliases map[string]int) {
 	for name, port := range aliases {
-		servers = append(servers, NewServer(name, port))
+		cc.apps = append(cc.apps, NewAliasApp(name, port))
 	}
-	return servers
+}
+
+func (cc *CommandCenter) loadProcessApps(dir string) {
+	procfiles, _ := filepath.Glob(fmt.Sprintf("%s/*/Procfile", dir))
+	for _, p := range procfiles {
+		app, err := NewProcessApp(p)
+		if err != nil {
+			log.Printf("Unable to load application %s. Error: %s\n", p, err.Error())
+		} else {
+			cc.apps = append(cc.apps, app)
+		}
+	}
 }
 
 const baseHTML = `
@@ -149,13 +162,6 @@ const baseHTML = `
 		{{$tld := .Tld}}
     <div id="container">
       <h1>BAM!!!</h1>
-      <h2>Aliased servers</h2>
-      <ul>
-				{{range .aliasedServers}}
-					<li><a href="http://{{.Name}}.{{$tld}}">{{.Name}}</a></li>
-				{{end}}
-      </ul>
-      <h2>Applications</h2>
       <ul>
 				{{range .apps}}
 					{{ if .Running}}

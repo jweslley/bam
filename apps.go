@@ -5,7 +5,6 @@ import (
 	"log"
 	"os"
 	"path"
-	"path/filepath"
 	"time"
 
 	"github.com/jweslley/procker"
@@ -70,20 +69,6 @@ func (a *processApp) buildProcess() procker.Process {
 	return procker.NewProcessGroup(p...)
 }
 
-func LoadApps(dir string) []App {
-	apps := []App{}
-	procfiles, _ := filepath.Glob(fmt.Sprintf("%s/*/Procfile", dir))
-	for _, p := range procfiles {
-		app, err := NewProcessApp(p)
-		if err != nil {
-			log.Printf("Unable to load application %s. Error: %s\n", p, err.Error())
-		} else {
-			apps = append(apps, app)
-		}
-	}
-	return apps
-}
-
 func NewProcessApp(procfile string) (App, error) {
 	processes, err := parseProfile(procfile)
 	if err != nil {
@@ -131,4 +116,31 @@ func parseEnv(filepath string) ([]string, error) {
 		return nil, err
 	}
 	return env, nil
+}
+
+type aliasApp struct {
+	server
+	running bool
+}
+
+func (a *aliasApp) Start() error {
+	a.running = true
+	return nil
+}
+
+func (a *aliasApp) Stop() error {
+	a.running = false
+	return nil
+}
+
+func (a *aliasApp) Running() bool {
+	return a.running
+}
+
+func NewAliasApp(name string, port int) App {
+	a := &aliasApp{}
+	a.name = name
+	a.port = port
+	a.running = true
+	return a
 }
