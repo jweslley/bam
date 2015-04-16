@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"log"
+	"net"
+	"net/http"
 	"os"
 	"path"
 	"time"
@@ -142,5 +144,56 @@ func NewAliasApp(name string, port int) App {
 	a.name = name
 	a.port = port
 	a.running = true
+	return a
+}
+
+type webServerApp struct {
+	server
+	dir      string
+	listener net.Listener
+}
+
+func (a *webServerApp) Start() error {
+	if a.Running() {
+		return fmt.Errorf("bam: %s already started", a.Name())
+	}
+
+	l, err := NewLocalListener()
+	if err != nil {
+		return err
+	}
+
+	port, err := AddrPort(l.Addr().String())
+	if err != nil {
+		return err
+	}
+
+	a.listener = l
+	a.port = port
+
+	s := &http.Server{Handler: http.StripPrefix("/", http.FileServer(http.Dir(a.dir)))}
+	go func() {
+		s.Serve(a.listener)
+		a.listener = nil
+	}()
+
+	return nil
+}
+
+func (a *webServerApp) Stop() error {
+	if !a.Running() {
+		return fmt.Errorf("bam: %s not started", a.Name())
+	}
+
+	return a.listener.Close()
+}
+
+func (a *webServerApp) Running() bool {
+	return a.listener != nil
+}
+
+func NewWebServerApp(dir string) App {
+	a := &webServerApp{dir: dir}
+	a.name = path.Base(dir)
 	return a
 }

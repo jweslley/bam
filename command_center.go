@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"path"
 	"path/filepath"
 	"text/template"
 )
@@ -11,7 +12,7 @@ import (
 type CommandCenter struct {
 	server
 	tld       string
-	apps      []App
+	apps      map[string]App
 	autoStart bool
 }
 
@@ -26,7 +27,7 @@ func init() {
 func NewCommandCenter(c *Config) *CommandCenter {
 	cc := &CommandCenter{tld: c.Tld}
 	cc.name = "bam"
-	cc.apps = []App{}
+	cc.apps = make(map[string]App)
 	cc.loadApps(c)
 	cc.autoStart = c.AutoStart
 	return cc
@@ -100,14 +101,22 @@ func (cc *CommandCenter) action(w http.ResponseWriter, r *http.Request, action f
 	http.Redirect(w, r, "/", 302)
 }
 
+func (cc *CommandCenter) register(a App) {
+	if _, ok := cc.apps[a.Name()]; ok {
+		return
+	}
+	cc.apps[a.Name()] = a
+}
+
 func (cc *CommandCenter) loadApps(c *Config) {
 	cc.loadAliasApps(c.Aliases)
 	cc.loadProcessApps(c.AppsDir)
+	cc.loadWebServerApps(c.AppsDir)
 }
 
 func (cc *CommandCenter) loadAliasApps(aliases map[string]int) {
 	for name, port := range aliases {
-		cc.apps = append(cc.apps, NewAliasApp(name, port))
+		cc.register(NewAliasApp(name, port))
 	}
 }
 
@@ -118,8 +127,15 @@ func (cc *CommandCenter) loadProcessApps(dir string) {
 		if err != nil {
 			log.Printf("Unable to load application %s. Error: %s\n", p, err.Error())
 		} else {
-			cc.apps = append(cc.apps, app)
+			cc.register(app)
 		}
+	}
+}
+
+func (cc *CommandCenter) loadWebServerApps(dir string) {
+	pages, _ := filepath.Glob(fmt.Sprintf("%s/*/index.html", dir))
+	for _, p := range pages {
+		cc.register(NewWebServerApp(path.Dir(p)))
 	}
 }
 
