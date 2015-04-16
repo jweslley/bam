@@ -38,8 +38,7 @@ func NewProxy(tld string, s Servers) *Proxy {
 		req.URL.Scheme = "http"
 		server, found := p.resolve(req.Host)
 		if found {
-			// FIXME use localhost
-			req.URL.Host = fmt.Sprint("127.0.0.1:", server.Port())
+			req.URL.Host = fmt.Sprint("localhost:", server.Port())
 		} else {
 			// FIXME redirect to bam server to show an error page
 			log.Printf("WARN No server found for host %s\n", req.Host)
