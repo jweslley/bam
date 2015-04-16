@@ -32,7 +32,7 @@ IMPORTANT: If you are using a custom config file you also must use -config optio
 
 Apply these rules to iptables using the following command:
 
-    sudo iptables-restore < bam.iptables.rules
+    sudo iptables-restore < iptables.rules
 
 Check the rules applied to iptables by executing:
 

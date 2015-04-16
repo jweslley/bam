@@ -22,14 +22,14 @@ On Linux, BAM! requires iptables and [localtld](https://github.com/jweslley/loca
 
 ### Linux
 
-    ./bam -configure
-    sudo iptables-restore < bam.iptables.rules
-    bam
+    ./bam -generate iptables > iptables.rules
+    sudo iptables-restore < iptables.rules
+    ./bam
 
 
 ## How it works
 
-BAM! is composed by a [reverse-proxy](https://github.com/jweslley/bam/blob/master/proxy.go) and an [application manager](https://github.com/jweslley/bam/blob/master/command_center.go). On startup, the application manager search for Procfile-based applications in a given directory (customized by configuration file) and list all applications found at address http://bam.app (yes, BAM! uses itself for managing other applications). From this listing, the user can start/stop applications.
+BAM! is composed by a [reverse-proxy](https://github.com/jweslley/bam/blob/master/proxy.go) and an [application manager](https://github.com/jweslley/bam/blob/master/command_center.go). On startup, the application manager search for Procfile-based applications in a given directory (customized by configuration file) and list all applications found at address http://bam.app . From this listing, the user can start/stop applications.
 
 However, in order to work properly, BAM! requires a couple of firewall rules and some tricks to resolve domain names. Thus, when the user access some application, like http://myblog.app, the DNS must be configured to resolve any request to the top-level-domain `.app` to `localhost`. After reaching port 80, the firewall must forward the request to reverse-proxy's port (defaults to 42042). Once inside the proxy, the request will be forwarded to the target application (`myblog` in this example).
 
