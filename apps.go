@@ -6,11 +6,22 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"time"
 
 	"github.com/jweslley/procker"
 )
 
-type App struct {
+type App interface {
+	Server
+
+	Start() error
+
+	Stop() error
+
+	Running() bool
+}
+
+type processApp struct {
 	server
 	dir       string
 	env       []string
@@ -18,8 +29,8 @@ type App struct {
 	process   procker.Process
 }
 
-func (a *App) Start() error {
-	if a.Started() {
+func (a *processApp) Start() error {
+	if a.Running() {
 		return fmt.Errorf("bam: %s already started", a.Name())
 	}
 
@@ -27,22 +38,22 @@ func (a *App) Start() error {
 	return a.process.Start()
 }
 
-func (a *App) Stop() error {
-	if !a.Started() {
+func (a *processApp) Stop() error {
+	if !a.Running() {
 		return fmt.Errorf("bam: %s not started", a.Name())
 	}
 
-	err := a.process.Stop(1000)
+	err := a.process.Stop(3 * time.Second) // FIXME magic number
 	a.process = nil
 	return err
 }
 
-func (a *App) Started() bool {
+func (a *processApp) Running() bool {
 	return a.process != nil && a.process.Running()
 }
 
-func (a *App) buildProcess() procker.Process {
-	port, _ := FreePort()
+func (a *processApp) buildProcess() procker.Process {
+	port, _ := FreePort() // FIXME swallow error
 	a.port = port
 	p := []procker.Process{}
 	for name, command := range a.processes {
@@ -59,11 +70,11 @@ func (a *App) buildProcess() procker.Process {
 	return procker.NewProcessGroup(p...)
 }
 
-func LoadApps(dir string) []*App {
-	apps := []*App{}
+func LoadApps(dir string) []App {
+	apps := []App{}
 	procfiles, _ := filepath.Glob(fmt.Sprintf("%s/*/Procfile", dir))
 	for _, p := range procfiles {
-		app, err := newApp(p)
+		app, err := NewProcessApp(p)
 		if err != nil {
 			log.Printf("Unable to load application %s. Error: %s\n", p, err.Error())
 		} else {
@@ -73,7 +84,7 @@ func LoadApps(dir string) []*App {
 	return apps
 }
 
-func newApp(procfile string) (*App, error) {
+func NewProcessApp(procfile string) (App, error) {
 	processes, err := parseProfile(procfile)
 	if err != nil {
 		log.Printf("Unable to load Procfile %s: %s\n", procfile, err)
@@ -89,10 +100,8 @@ func newApp(procfile string) (*App, error) {
 		env = []string{}
 	}
 
-	a := &App{dir: dir}
+	a := &processApp{dir: dir, env: env, processes: processes}
 	a.name = name
-	a.env = env
-	a.processes = processes
 	return a, nil
 }
 

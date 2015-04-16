@@ -10,7 +10,7 @@ import (
 type CommandCenter struct {
 	server
 	tld       string
-	apps      []*App
+	apps      []App
 	servers   []Server
 	autoStart bool
 }
@@ -78,20 +78,20 @@ func (cc *CommandCenter) index(w http.ResponseWriter, r *http.Request) {
 }
 
 func (cc *CommandCenter) start(w http.ResponseWriter, r *http.Request) {
-	cc.action(w, r, func(a *App) error {
+	cc.action(w, r, func(a App) error {
 		log.Printf("Starting app %s\n", a.Name())
 		return a.Start()
 	})
 }
 
 func (cc *CommandCenter) stop(w http.ResponseWriter, r *http.Request) {
-	cc.action(w, r, func(a *App) error {
+	cc.action(w, r, func(a App) error {
 		log.Printf("Stopping app %s\n", a.Name())
 		return a.Stop()
 	})
 }
 
-func (cc *CommandCenter) action(w http.ResponseWriter, r *http.Request, action func(a *App) error) {
+func (cc *CommandCenter) action(w http.ResponseWriter, r *http.Request, action func(a App) error) {
 	name := r.URL.Query().Get("app")
 	for _, app := range cc.apps {
 		if app.Name() == name {
@@ -158,7 +158,7 @@ const baseHTML = `
       <h2>Applications</h2>
       <ul>
 				{{range .apps}}
-					{{ if .Started}}
+					{{ if .Running}}
 						<li class="green">
 					{{ else }}
 						<li class="red">
@@ -167,7 +167,7 @@ const baseHTML = `
 						<a href="http://{{.Name}}.{{$tld}}">{{.Name}}</a>
 						</div>
 						<div style="text-align: right">
-						{{ if .Started}}
+						{{ if .Running}}
 							<a href="http://bam.{{$tld}}/stop?app={{.Name}}">Stop</a>
 						{{ else }}
 							<a href="http://bam.{{$tld}}/start?app={{.Name}}">Start</a>

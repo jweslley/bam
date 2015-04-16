@@ -13,9 +13,7 @@ import (
 
 const programVersion = "0.0.1-alpha"
 
-var (
-	configTemplates = make(map[string]string)
-)
+var configTemplates = make(map[string]string)
 
 type Config struct {
 	AppsDir   string         `toml:"apps_dir"`
@@ -71,7 +69,7 @@ func main() {
 
 	if *versionFlag {
 		fmt.Printf("bam %s\n", programVersion)
-		os.Exit(0)
+		return
 	}
 
 	cfg := parseConfig(*configFlag)
