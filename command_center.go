@@ -12,8 +12,9 @@ import (
 type CommandCenter struct {
 	server
 	tld       string
-	apps      map[string]App
 	autoStart bool
+	apps      map[string]App
+	servers   []Server
 }
 
 var tmpl *template.Template
@@ -28,17 +29,14 @@ func NewCommandCenter(c *Config) *CommandCenter {
 	cc := &CommandCenter{tld: c.Tld}
 	cc.name = "bam"
 	cc.apps = make(map[string]App)
+	cc.servers = []Server{cc}
 	cc.loadApps(c)
 	cc.autoStart = c.AutoStart
 	return cc
 }
 
 func (cc *CommandCenter) List() []Server {
-	s := []Server{cc}
-	for _, app := range cc.apps {
-		s = append(s, app)
-	}
-	return s
+	return cc.servers
 }
 
 func (cc *CommandCenter) Start() error {
@@ -92,12 +90,8 @@ func (cc *CommandCenter) stop(w http.ResponseWriter, r *http.Request) {
 
 func (cc *CommandCenter) action(w http.ResponseWriter, r *http.Request, action func(a App) error) {
 	name := r.URL.Query().Get("app")
-	for _, app := range cc.apps {
-		if app.Name() == name {
-			action(app)
-			break
-		}
-	}
+	app, _ := cc.apps[name] // FIXME not found
+	action(app)
 	http.Redirect(w, r, "/", 302)
 }
 
@@ -106,6 +100,7 @@ func (cc *CommandCenter) register(a App) {
 		return
 	}
 	cc.apps[a.Name()] = a
+	cc.servers = append(cc.servers, a)
 }
 
 func (cc *CommandCenter) loadApps(c *Config) {
