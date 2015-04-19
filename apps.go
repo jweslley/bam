@@ -174,7 +174,6 @@ func (a *webServerApp) Start() error {
 	s := &http.Server{Handler: http.StripPrefix("/", http.FileServer(http.Dir(a.dir)))}
 	go func() {
 		s.Serve(a.listener)
-		a.listener = nil
 	}()
 
 	return nil
@@ -185,7 +184,9 @@ func (a *webServerApp) Stop() error {
 		return fmt.Errorf("bam: %s not started", a.Name())
 	}
 
-	return a.listener.Close()
+	err := a.listener.Close()
+	a.listener = nil
+	return err
 }
 
 func (a *webServerApp) Running() bool {
