@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"net"
 	"net/http"
 	"os"
@@ -35,7 +34,12 @@ func (a *processApp) Start() error {
 		return fmt.Errorf("bam: %s already started", a.Name())
 	}
 
-	a.process = a.buildProcess()
+	p, err := a.buildProcess()
+	if err != nil {
+		return err
+	}
+
+	a.process = p
 	return a.process.Start()
 }
 
@@ -53,8 +57,12 @@ func (a *processApp) Running() bool {
 	return a.process != nil && a.process.Running()
 }
 
-func (a *processApp) buildProcess() procker.Process {
-	port, _ := FreePort() // FIXME swallow error
+func (a *processApp) buildProcess() (procker.Process, error) {
+	port, err := FreePort()
+	if err != nil {
+		return nil, err
+	}
+
 	a.port = port
 	p := []procker.Process{}
 	for name, command := range a.processes {
@@ -68,13 +76,12 @@ func (a *processApp) buildProcess() procker.Process {
 		}
 		p = append(p, process)
 	}
-	return procker.NewProcessGroup(p...)
+	return procker.NewProcessGroup(p...), nil
 }
 
 func NewProcessApp(procfile string) (App, error) {
 	processes, err := parseProfile(procfile)
 	if err != nil {
-		log.Printf("Unable to load Procfile %s: %s\n", procfile, err)
 		return nil, err
 	}
 
@@ -83,7 +90,6 @@ func NewProcessApp(procfile string) (App, error) {
 	envFile := path.Join(dir, ".env")
 	env, err := parseEnv(envFile)
 	if err != nil {
-		log.Printf("Unable to load env file %s: %s\n", envFile, err)
 		env = []string{}
 	}
 
@@ -174,6 +180,7 @@ func (a *webServerApp) Start() error {
 	s := &http.Server{Handler: http.StripPrefix("/", http.FileServer(http.Dir(a.dir)))}
 	go func() {
 		s.Serve(a.listener)
+		a.listener = nil
 	}()
 
 	return nil

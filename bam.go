@@ -50,7 +50,7 @@ func generate(name string, c *Config) {
 		os.Exit(1)
 	}
 
-	template.Must(template.New(name).Parse(tpl)).Execute(os.Stdout, c)
+	fail(template.Must(template.New(name).Parse(tpl)).Execute(os.Stdout, c))
 }
 
 func usage() {
