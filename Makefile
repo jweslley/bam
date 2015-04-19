@@ -8,8 +8,8 @@ build: deps
 	go build
 
 tests: deps
-	go build -x -o ./test/fileserver/fileserver ./test/fileserver
-	go build -x -o ./test/ping/ping ./test/ping
+	go build -o ./examples/fileserver/fileserver ./examples/fileserver
+	go build -o ./examples/ping/ping ./examples/ping
 	go test -v
 
 coverage: tests
@@ -17,4 +17,4 @@ coverage: tests
 	go tool cover -html=bam.cover
 
 clean:
-	rm -f ./bam ./test/fileserver/fileserver ./test/ping/ping
+	rm -f ./bam ./examples/fileserver/fileserver ./examples/ping/ping

@@ -9,7 +9,7 @@ import (
 
 func TestApps(t *testing.T) {
 	apps := []App{}
-	procfiles := []string{"./test/fileserver/Procfile", "./test/ping/Procfile"}
+	procfiles := []string{"./examples/fileserver/Procfile", "./examples/ping/Procfile"}
 	for _, pf := range procfiles {
 		fs, err := NewProcessApp(pf)
 		if err != nil {
@@ -18,7 +18,7 @@ func TestApps(t *testing.T) {
 		apps = append(apps, fs)
 	}
 
-	apps = append(apps, NewWebServerApp("./test/static"))
+	apps = append(apps, NewWebServerApp("./examples/static"))
 
 	var wg sync.WaitGroup
 	for _, app := range apps {
