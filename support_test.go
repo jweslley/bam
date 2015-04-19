@@ -15,7 +15,7 @@ func TestAddrPort(t *testing.T) {
 	for _, test := range tests {
 		port, _ := AddrPort(test.addr)
 		if port != test.port {
-			t.Errorf("got %s; expected %s", port, test.port)
+			t.Errorf("got %d; expected %d", port, test.port)
 		}
 	}
 }
