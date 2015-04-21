@@ -9,20 +9,52 @@ import (
 	"text/template"
 )
 
+type data map[string]interface{}
+
+var templates = make(map[string]*template.Template)
+
+func init() {
+	for name, html := range pagesHTML {
+		t := template.New(name)
+		template.Must(t.Parse(html))
+		template.Must(t.Parse(baseHTML))
+		templates[name] = t
+	}
+}
+
+func render(w http.ResponseWriter, name string, d data) {
+	w.Header().Add("Content-Type", "text/html")
+
+	t, ok := templates[name]
+	if !ok {
+		renderError(w, http.StatusNotFound, fmt.Errorf("Page not found: %s", name))
+		return
+	}
+
+	err := t.ExecuteTemplate(w, "root", d)
+	if err != nil {
+		renderError(w, http.StatusInternalServerError, err)
+	}
+}
+
+func renderError(w http.ResponseWriter, status int, e error) {
+	w.WriteHeader(status)
+	err := templates["error"].ExecuteTemplate(w, "root", data{
+		"Title": fmt.Sprintf("Error %d", status),
+		"Error": e,
+	})
+
+	if err != nil {
+		log.Println(err)
+	}
+}
+
 type CommandCenter struct {
 	server
 	tld       string
 	autoStart bool
 	apps      map[string]App
 	servers   []Server
-}
-
-var tmpl *template.Template
-
-func init() {
-	t, err := template.New("-").Parse(baseHTML)
-	fail(err)
-	tmpl = t
 }
 
 func NewCommandCenter(c *Config) *CommandCenter {
@@ -66,12 +98,11 @@ func (cc *CommandCenter) createHandler() http.Handler {
 }
 
 func (cc *CommandCenter) index(w http.ResponseWriter, r *http.Request) {
-	w.Header().Add("Content-Type", "text/html")
-	data := map[string]interface{}{
-		"Tld":  cc.tld,
-		"apps": cc.apps,
-	}
-	tmpl.Execute(w, data)
+	render(w, "index", data{
+		"Title": "BAM!",
+		"Tld":   cc.tld,
+		"Apps":  cc.apps,
+	})
 }
 
 func (cc *CommandCenter) start(w http.ResponseWriter, r *http.Request) {
@@ -135,9 +166,10 @@ func (cc *CommandCenter) loadWebServerApps(dir string) {
 }
 
 const baseHTML = `
+{{ define "root" }}
 <html>
   <head>
-    <title>Bam's Command Center</title>
+    <title>{{.Title}}</title>
     <style type="text/css">
       body {
         background-color: #ecf0f1;
@@ -170,30 +202,42 @@ const baseHTML = `
     </style>
   </head>
   <body>
-		{{$tld := .Tld}}
     <div id="container">
-      <h1>BAM!!!</h1>
-      <ul>
-				{{range .apps}}
-					{{ if .Running}}
-						<li class="green">
-					{{ else }}
-						<li class="red">
-					{{ end }}
-						<div style="text-align: left">
-						<a href="http://{{.Name}}.{{$tld}}">{{.Name}}</a>
-						</div>
-						<div style="text-align: right">
-						{{ if .Running}}
-							<a href="http://bam.{{$tld}}/stop?app={{.Name}}">Stop</a>
-						{{ else }}
-							<a href="http://bam.{{$tld}}/start?app={{.Name}}">Start</a>
-						{{ end }}
-						</div>
-					</li>
-				{{end}}
-      </ul>
+			<h1>{{.Title}}</h1>
+			{{ template "body" . }}
     </div>
   </body>
 </html>
+{{ end }}
 `
+
+var pagesHTML = map[string]string{
+	"index": `
+	{{ define "body" }}
+		{{$tld := .Tld}}
+		<ul>
+			{{range .Apps}}
+				{{ if .Running}}
+					<li class="green">
+				{{ else }}
+					<li class="red">
+				{{ end }}
+					<div style="text-align: left">
+					<a href="http://{{.Name}}.{{$tld}}">{{.Name}}</a>
+					</div>
+					<div style="text-align: right">
+					{{ if .Running}}
+						<a href="http://bam.{{$tld}}/stop?app={{.Name}}">Stop</a>
+					{{ else }}
+						<a href="http://bam.{{$tld}}/start?app={{.Name}}">Start</a>
+					{{ end }}
+					</div>
+				</li>
+			{{end}}
+		</ul>
+	{{ end }}`,
+	"error": `
+	{{ define "body" }}
+		{{.Error}}
+	{{ end }}`,
+}
