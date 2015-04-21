@@ -72,7 +72,11 @@ func (cc *CommandCenter) List() []Server {
 }
 
 func (cc *CommandCenter) Start() error {
-	port, _ := FreePort()
+	port, err := FreePort()
+	if err != nil {
+		return err
+	}
+
 	cc.port = port
 	if cc.autoStart {
 		go func() {
@@ -84,8 +88,13 @@ func (cc *CommandCenter) Start() error {
 
 func (cc *CommandCenter) startApps() {
 	for _, app := range cc.apps {
-		log.Printf("Starting app %s\n", app.Name())
-		go app.Start()
+		go func(a App) {
+			log.Printf("Starting app %s\n", app.Name())
+			err := app.Start()
+			if err != nil {
+				log.Printf("Failed to start %s: %s\n", app.Name(), err)
+			}
+		}(app)
 	}
 }
 
@@ -121,9 +130,18 @@ func (cc *CommandCenter) stop(w http.ResponseWriter, r *http.Request) {
 
 func (cc *CommandCenter) action(w http.ResponseWriter, r *http.Request, action func(a App) error) {
 	name := r.URL.Query().Get("app")
-	app, _ := cc.apps[name] // FIXME not found
-	action(app)
-	http.Redirect(w, r, "/", 302)
+	app, found := cc.apps[name]
+	if !found {
+		renderError(w, http.StatusNotFound, fmt.Errorf("Application not found: %s", name))
+		return
+	}
+
+	err := action(app)
+	if err != nil {
+		renderError(w, http.StatusInternalServerError, err)
+	} else {
+		http.Redirect(w, r, "/", http.StatusFound)
+	}
 }
 
 func (cc *CommandCenter) register(a App) {
@@ -147,11 +165,16 @@ func (cc *CommandCenter) loadAliasApps(aliases map[string]int) {
 }
 
 func (cc *CommandCenter) loadProcessApps(dir string) {
-	procfiles, _ := filepath.Glob(fmt.Sprintf("%s/*/Procfile", dir))
+	procfiles, err := filepath.Glob(fmt.Sprintf("%s/*/Procfile", dir))
+	if err != nil {
+		log.Printf("An error occurred while searching for Procfiles at directory %s: %s\n", dir, err)
+		return
+	}
+
 	for _, p := range procfiles {
 		app, err := NewProcessApp(p)
 		if err != nil {
-			log.Printf("Unable to load application %s. Error: %s\n", p, err.Error())
+			log.Printf("Unable to load application %s. Error: %s\n", p, err)
 		} else {
 			cc.register(app)
 		}
@@ -159,7 +182,12 @@ func (cc *CommandCenter) loadProcessApps(dir string) {
 }
 
 func (cc *CommandCenter) loadWebServerApps(dir string) {
-	pages, _ := filepath.Glob(fmt.Sprintf("%s/*/index.html", dir))
+	pages, err := filepath.Glob(fmt.Sprintf("%s/*/index.html", dir))
+	if err != nil {
+		log.Printf("An error occurred while searching for index.html at directory %s: %s\n", dir, err)
+		return
+	}
+
 	for _, p := range pages {
 		cc.register(NewWebServerApp(path.Dir(p)))
 	}
