@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"sync"
 	"testing"
+	"time"
 )
 
 func TestApps(t *testing.T) {
@@ -43,6 +44,8 @@ func TestApps(t *testing.T) {
 			if a.Port() == 0 {
 				t.Fatalf("Port should not be zeroed: %s", a.Name())
 			}
+
+			<-time.After(1 * time.Second) // wait for start
 
 			req, _ := http.NewRequest("GET", fmt.Sprintf("http://localhost:%d", a.Port()), nil)
 			res, err := http.DefaultClient.Do(req)
