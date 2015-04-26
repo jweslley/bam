@@ -45,7 +45,7 @@ func renderError(w http.ResponseWriter, status int, e error) {
 	})
 
 	if err != nil {
-		log.Println(err)
+		log.Printf("ERROR: %s\n", err)
 	}
 }
 
@@ -109,9 +109,10 @@ func (cc *CommandCenter) createHandler() http.Handler {
 
 func (cc *CommandCenter) index(w http.ResponseWriter, r *http.Request) {
 	render(w, "index", data{
-		"Title": "BAM!",
-		"Tld":   cc.tld,
-		"Apps":  cc.apps,
+		"Title":         "BAM!",
+		"CommandCenter": cc.name,
+		"Tld":           cc.tld,
+		"Apps":          cc.apps,
 	})
 }
 
@@ -249,6 +250,7 @@ var pagesHTML = map[string]string{
 	"index": `
 	{{ define "body" }}
 		{{$tld := .Tld}}
+		{{$command_center := .CommandCenter}}
 		<ul>
 			{{range .Apps}}
 				{{ if .Running}}
@@ -261,9 +263,9 @@ var pagesHTML = map[string]string{
 					</div>
 					<div style="text-align: right">
 					{{ if .Running}}
-						<a href="http://bam.{{$tld}}/stop?app={{.Name}}">Stop</a>
+						<a href="http://{{$command_center}}.{{$tld}}/stop?app={{.Name}}">Stop</a>
 					{{ else }}
-						<a href="http://bam.{{$tld}}/start?app={{.Name}}">Start</a>
+						<a href="http://{{$command_center}}.{{$tld}}/start?app={{.Name}}">Start</a>
 					{{ end }}
 					</div>
 				</li>
