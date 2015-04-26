@@ -91,7 +91,3 @@ func (s *server) Port() int {
 func (s *server) String() string {
 	return fmt.Sprintf("%s:%d", s.name, s.port)
 }
-
-func NewServer(name string, port int) Server {
-	return &server{name, port}
-}

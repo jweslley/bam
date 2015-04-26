@@ -43,9 +43,9 @@ func TestMatchXipDomains(t *testing.T) {
 
 func TestProxyResolve(t *testing.T) {
 	servers := []Server{
-		NewServer("godoc", 6060),
-		NewServer("goapp", 8080),
-		NewServer("btsync", 8888),
+		newServer("godoc", 6060),
+		newServer("goapp", 8080),
+		newServer("btsync", 8888),
 	}
 	p := NewProxy("local", newServers(servers))
 
@@ -95,7 +95,7 @@ func TestProxy(t *testing.T) {
 			fmt.Fprint(w, content)
 		}))
 		port := getServerPort(t, s.URL)
-		servers = append(servers, NewServer(name, port))
+		servers = append(servers, newServer(name, port))
 		return s
 	}
 
@@ -172,6 +172,12 @@ func (s *servers) List() []Server {
 	return s.servers
 }
 
-func newServers(s []Server) Servers {
-	return &servers{s}
+func newServers(ss []Server) Servers {
+	s := &servers{}
+	s.servers = ss
+	return s
+}
+
+func newServer(name string, port int) Server {
+	return &server{name, port}
 }
