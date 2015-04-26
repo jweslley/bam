@@ -5,14 +5,14 @@ deps:
 	go get github.com/jweslley/procker
 
 build: deps
-	go build
-
-tests: deps
 	go build -o ./examples/fileserver/fileserver ./examples/fileserver
 	go build -o ./examples/ping/ping ./examples/ping
+	go build
+
+tests: build
 	go test -v
 
-qa:
+qa: build
 	go vet
 	golint
 	go test -coverprofile=.bam.cover~
