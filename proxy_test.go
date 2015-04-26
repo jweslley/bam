@@ -149,6 +149,26 @@ func TestProxy(t *testing.T) {
 	for _, tt := range tests {
 		requestCheck(tt.name, tt.status, tt.content)
 	}
+
+	missedRequestCheck := func(host string, expectedStatus int) {
+		req, _ := http.NewRequest("GET", proxy.URL, nil)
+		req.Host = host
+		req.Close = true
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if res.StatusCode != expectedStatus {
+			t.Errorf("Status code: got %d; expected %d", res.StatusCode, expectedStatus)
+		}
+	}
+
+	t.SkipNow()
+	missedHosts := []string{"foo", "bar", "baz"}
+	for _, host := range missedHosts {
+		missedRequestCheck(host, http.StatusNotFound)
+	}
 }
 
 func getServerPort(t *testing.T, baseURL string) int {
