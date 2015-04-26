@@ -165,6 +165,7 @@ func getServerPort(t *testing.T, baseURL string) int {
 }
 
 type servers struct {
+	server
 	servers []Server
 }
 

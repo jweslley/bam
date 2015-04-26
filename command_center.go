@@ -89,10 +89,10 @@ func (cc *CommandCenter) Start() error {
 func (cc *CommandCenter) startApps() {
 	for _, app := range cc.apps {
 		go func(a App) {
-			log.Printf("Starting app %s\n", app.Name())
-			err := app.Start()
+			log.Printf("Starting app %s\n", a.Name())
+			err := a.Start()
 			if err != nil {
-				log.Printf("Failed to start %s: %s\n", app.Name(), err)
+				log.Printf("Failed to start %s: %s\n", a.Name(), err)
 			}
 		}(app)
 	}
@@ -103,6 +103,7 @@ func (cc *CommandCenter) createHandler() http.Handler {
 	mux.HandleFunc("/", cc.index)
 	mux.HandleFunc("/start", cc.start)
 	mux.HandleFunc("/stop", cc.stop)
+	mux.HandleFunc("/not-found", cc.notFound)
 	return mux
 }
 
@@ -142,6 +143,11 @@ func (cc *CommandCenter) action(w http.ResponseWriter, r *http.Request, action f
 	} else {
 		http.Redirect(w, r, "/", http.StatusFound)
 	}
+}
+
+func (cc *CommandCenter) notFound(w http.ResponseWriter, r *http.Request) {
+	name := r.URL.Query().Get("app")
+	renderError(w, http.StatusNotFound, fmt.Errorf("Application doesn't exist: %s", name))
 }
 
 func (cc *CommandCenter) register(a App) {
