@@ -51,7 +51,6 @@ However, in order to work properly, BAM! requires a couple of firewall rules and
 * SSL support
 * Start scripts
 * Package installers
-* Better UI
 
 
 ## Bugs and Feedback

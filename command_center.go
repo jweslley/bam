@@ -1,5 +1,7 @@
 package main
 
+//go:generate esc -o command_center_assets.go -prefix=public public
+
 import (
 	"fmt"
 	"log"
@@ -11,35 +13,59 @@ import (
 
 type data map[string]interface{}
 
-var templates = make(map[string]*template.Template)
+type CommandCenter struct {
+	server
+	tld       string
+	autoStart bool
+	apps      map[string]App
+	servers   []Server
+	templates map[string]*template.Template
+}
 
-func init() {
+func NewCommandCenter(c *Config) *CommandCenter {
+	cc := &CommandCenter{tld: c.Tld, autoStart: c.AutoStart}
+	cc.name = "bam"
+	cc.apps = make(map[string]App)
+	cc.servers = []Server{cc}
+	cc.parseTemplates()
+	cc.loadApps(c)
+	return cc
+}
+
+func (cc *CommandCenter) parseTemplates() {
+	tf := template.FuncMap{
+		"rootURL":   cc.rootURL,
+		"assetPath": cc.assetPath,
+		"appURL":    cc.appURL,
+		"actionURL": cc.actionURL,
+	}
+	cc.templates = make(map[string]*template.Template)
 	for name, html := range pagesHTML {
-		t := template.New(name)
+		t := template.New(name).Funcs(tf)
 		template.Must(t.Parse(html))
 		template.Must(t.Parse(baseHTML))
-		templates[name] = t
+		cc.templates[name] = t
 	}
 }
 
-func render(w http.ResponseWriter, name string, d data) {
+func (cc *CommandCenter) render(w http.ResponseWriter, name string, d data) {
 	w.Header().Add("Content-Type", "text/html")
 
-	t, ok := templates[name]
+	t, ok := cc.templates[name]
 	if !ok {
-		renderError(w, http.StatusNotFound, fmt.Errorf("Page not found: %s", name))
+		cc.renderError(w, http.StatusNotFound, fmt.Errorf("Page not found: %s", name))
 		return
 	}
 
 	err := t.ExecuteTemplate(w, "root", d)
 	if err != nil {
-		renderError(w, http.StatusInternalServerError, err)
+		cc.renderError(w, http.StatusInternalServerError, err)
 	}
 }
 
-func renderError(w http.ResponseWriter, status int, e error) {
+func (cc *CommandCenter) renderError(w http.ResponseWriter, status int, e error) {
 	w.WriteHeader(status)
-	err := templates["error"].ExecuteTemplate(w, "root", data{
+	err := cc.templates["error"].ExecuteTemplate(w, "root", data{
 		"Title": fmt.Sprintf("Error %d", status),
 		"Error": e,
 	})
@@ -49,22 +75,20 @@ func renderError(w http.ResponseWriter, status int, e error) {
 	}
 }
 
-type CommandCenter struct {
-	server
-	tld       string
-	autoStart bool
-	apps      map[string]App
-	servers   []Server
+func (cc *CommandCenter) rootURL() string {
+	return cc.appURL(cc.name)
 }
 
-func NewCommandCenter(c *Config) *CommandCenter {
-	cc := &CommandCenter{tld: c.Tld}
-	cc.name = "bam"
-	cc.apps = make(map[string]App)
-	cc.servers = []Server{cc}
-	cc.loadApps(c)
-	cc.autoStart = c.AutoStart
-	return cc
+func (cc *CommandCenter) assetPath(path string) string {
+	return fmt.Sprintf("%s/assets/%s", cc.rootURL(), path)
+}
+
+func (cc *CommandCenter) appURL(app string) string {
+	return fmt.Sprintf("http://%s.%s", app, cc.tld)
+}
+
+func (cc *CommandCenter) actionURL(action, app string) string {
+	return fmt.Sprintf("%s/%s?app=%s", cc.rootURL(), action, app)
 }
 
 func (cc *CommandCenter) List() []Server {
@@ -104,15 +128,14 @@ func (cc *CommandCenter) createHandler() http.Handler {
 	mux.HandleFunc("/start", cc.start)
 	mux.HandleFunc("/stop", cc.stop)
 	mux.HandleFunc("/not-found", cc.notFound)
+	mux.Handle("/assets/", http.StripPrefix("/assets/", http.FileServer(FS(false))))
 	return mux
 }
 
 func (cc *CommandCenter) index(w http.ResponseWriter, r *http.Request) {
-	render(w, "index", data{
-		"Title":         "BAM!",
-		"CommandCenter": cc.name,
-		"Tld":           cc.tld,
-		"Apps":          cc.apps,
+	cc.render(w, "index", data{
+		"Title": "BAM!",
+		"Apps":  cc.apps,
 	})
 }
 
@@ -134,13 +157,13 @@ func (cc *CommandCenter) action(w http.ResponseWriter, r *http.Request, action f
 	name := r.URL.Query().Get("app")
 	app, found := cc.apps[name]
 	if !found {
-		renderError(w, http.StatusNotFound, fmt.Errorf("Application not found: %s", name))
+		cc.renderError(w, http.StatusNotFound, fmt.Errorf("Application not found: %s", name))
 		return
 	}
 
 	err := action(app)
 	if err != nil {
-		renderError(w, http.StatusInternalServerError, err)
+		cc.renderError(w, http.StatusInternalServerError, err)
 	} else {
 		http.Redirect(w, r, "/", http.StatusFound)
 	}
@@ -148,7 +171,7 @@ func (cc *CommandCenter) action(w http.ResponseWriter, r *http.Request, action f
 
 func (cc *CommandCenter) notFound(w http.ResponseWriter, r *http.Request) {
 	name := r.URL.Query().Get("app")
-	renderError(w, http.StatusNotFound, fmt.Errorf("Application doesn't exist: %s", name))
+	cc.renderError(w, http.StatusNotFound, fmt.Errorf("Application doesn't exist: %s", name))
 }
 
 func (cc *CommandCenter) register(a App) {
@@ -205,40 +228,10 @@ const baseHTML = `
 <html>
   <head>
     <title>{{.Title}}</title>
-    <style type="text/css">
-      body {
-        background-color: #ecf0f1;
-        font-family: Helvetica,Arial,sans-serif;
-      }
-      #container {
-        width: 90%;
-        max-width: 750px;
-        padding-right: 15px;
-        padding-left: 15px;
-        margin-right: auto;
-        margin-left: auto;
-      }
-      ul {
-        list-style: none;
-        padding: 0;
-        margin: 10px 0;
-      }
-      li {
-        padding: 10px;
-        margin: 5px;
-        background-color: #3498db;
-      }
-      li.green { background-color: #1abc9c; }
-      li.red { background-color: #e74c3c; }
-      a {
-        color: white;
-        text-decoration: none;
-      }
-    </style>
+		<link rel="stylesheet" type="text/css" href="{{ assetPath "bam.css"}}">
   </head>
   <body>
     <div id="container">
-			<h1>{{.Title}}</h1>
 			{{ template "body" . }}
     </div>
   </body>
@@ -249,31 +242,39 @@ const baseHTML = `
 var pagesHTML = map[string]string{
 	"index": `
 	{{ define "body" }}
-		{{$tld := .Tld}}
-		{{$command_center := .CommandCenter}}
-		<ul>
+		<h1> <a href="{{ rootURL }}">BAM!</a> </h1>
+		<ul class="list">
 			{{range .Apps}}
 				{{ if .Running}}
 					<li class="green">
 				{{ else }}
 					<li class="red">
 				{{ end }}
-					<div style="text-align: left">
-					<a href="http://{{.Name}}.{{$tld}}">{{.Name}}</a>
-					</div>
-					<div style="text-align: right">
-					{{ if .Running}}
-						<a href="http://{{$command_center}}.{{$tld}}/stop?app={{.Name}}">Stop</a>
-					{{ else }}
-						<a href="http://{{$command_center}}.{{$tld}}/start?app={{.Name}}">Start</a>
-					{{ end }}
-					</div>
+					<a class="title" href="{{ appURL .Name }}">{{.Name}}</a>
+					<span></span>
+					<ul class="actions">
+						<li>
+							{{ if .Running}}
+								<a href="{{ actionURL "stop" .Name }}">
+									<img src="{{ assetPath "images/stop.png" }}">
+								</a>
+							{{ else }}
+								<a href="{{ actionURL "start" .Name }}">
+									<img src="{{ assetPath "images/start.png" }}">
+								</a>
+							{{ end }}
+						</li>
+					</ul>
 				</li>
 			{{end}}
 		</ul>
 	{{ end }}`,
 	"error": `
 	{{ define "body" }}
-		{{.Error}}
+		<h1> <a href="{{ rootURL }}">BAM!</a> </h1>
+		<div class="error-box">
+			<h3>{{.Title}}</h3>
+			{{.Error}}
+		</div>
 	{{ end }}`,
 }
