@@ -1,26 +1,28 @@
 <html>
   <head>
+    <meta charset="utf-8">
     <title>BAM!</title>
     <link rel="stylesheet" type="text/css" href="bam.css">
   </head>
   <body>
     <div id="container">
       <h1> <a href="">BAM!</a> </h1>
+      <input type="text" id="search-box" placeholder="Search" onkeyup="search();"></input>
       <ul class="list">
-        <li class="green">
+        <li data-app="rails" class="green">
           <a class="title" href=""> rails </a>
           <span>message</span>
           <ul class="actions">
             <li><a href=""> <img src="images/stop.png"></img> </a></li>
           </ul>
         </li>
-        <li class="red">
+        <li data-app="ping" class="red">
           <a class="title" href=""> ping </a>
           <ul class="actions">
             <li><a href="" title="start"> <img src="images/start.png"></img> </a></li>
           </ul>
         </li>
-        <li class="gray">
+        <li data-app="static" class="gray">
           <a class="title" href=""> static </a>
           <ul class="actions">
             <li><a href=""> <img src="images/start.png"></img> </a></li>
@@ -29,5 +31,6 @@
         </li>
       </ul>
     </div>
+    <script type="text/javascript" src="bam.js"></script>
   </body>
 </html>

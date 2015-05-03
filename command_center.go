@@ -228,13 +228,15 @@ const baseHTML = `
 {{ define "root" }}
 <html>
   <head>
+    <meta charset="utf-8">
     <title>{{.Title}}</title>
-		<link rel="stylesheet" type="text/css" href="{{ assetPath "bam.css"}}">
+		<link rel="stylesheet" type="text/css" href="{{ assetPath "bam.css" }}">
   </head>
   <body>
     <div id="container">
 			{{ template "body" . }}
     </div>
+    <script type="text/javascript" src="{{ assetPath "bam.js" }}"></script>
   </body>
 </html>
 {{ end }}
@@ -244,12 +246,13 @@ var pagesHTML = map[string]string{
 	"index": `
 	{{ define "body" }}
 		<h1> <a href="{{ rootURL }}">BAM!</a> </h1>
+		<input type="text" id="search-box" placeholder="Search" onkeyup="search();"></input>
 		<ul class="list">
 			{{range .Apps}}
 				{{ if .Running}}
-					<li class="green">
+					<li data-app="{{.Name}}" class="green">
 				{{ else }}
-					<li class="red">
+					<li data-app="{{.Name}}" class="red">
 				{{ end }}
 					<a class="title" href="{{ appURL .Name }}">{{.Name}}</a>
 					<span></span>
