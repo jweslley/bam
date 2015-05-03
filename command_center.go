@@ -1,6 +1,6 @@
 package main
 
-//go:generate esc -o command_center_assets.go -prefix=public public
+//go:generate esc -o command_center_assets.go -prefix=public public/bam.js public/bam.css public/images/
 
 import (
 	"bytes"
