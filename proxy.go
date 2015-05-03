@@ -20,7 +20,7 @@ type Server interface {
 // Servers provides a list of available servers.
 type Servers interface {
 	Server
-	List() []Server
+	Get(string) (Server, bool)
 }
 
 // Proxy is a ReverseProxy that takes an incoming request and
@@ -50,32 +50,20 @@ func NewProxy(tld string, s Servers) *Proxy {
 	return p
 }
 
-// Resolve finds a Server matching the given host.
-// Return false, if any Server matches host.
 func (p *Proxy) resolve(host string) (Server, bool) {
-	for _, s := range p.servers.List() {
-		if p.match(s, host) {
-			return s, true
-		}
+	name := p.serverNameFromHost(host)
+	return p.servers.Get(name)
+}
+
+func (p *Proxy) serverNameFromHost(host string) string {
+	var prefix string
+	if xipio.MatchString(host) {
+		prefix = xipio.ReplaceAllString(host, "$1")
+	} else {
+		prefix = strings.TrimSuffix(host, "."+p.tld)
 	}
-	return nil, false
-}
-
-// match checks is host matches server's name.
-func (p *Proxy) match(s Server, host string) bool {
-	return matchDomains(s.Name()+"."+p.tld, host) || matchXipDomain(s.Name(), host)
-}
-
-// matchDomains checks whether 'a' domain is equals to 'b' domain, or,
-// 'b' domain is a subdomain of 'a' domain.
-func matchDomains(a, b string) bool {
-	return a == b || strings.HasSuffix(b, "."+a)
-}
-
-// matchXipDomain checks whether host is a xip domain of name.
-func matchXipDomain(name, host string) bool {
-	subdomain := xipio.ReplaceAllString(host, "$1")
-	return matchDomains(name, subdomain)
+	t := strings.Split(prefix, ".")
+	return t[len(t)-1]
 }
 
 type server struct {

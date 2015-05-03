@@ -18,7 +18,6 @@ type CommandCenter struct {
 	tld       string
 	autoStart bool
 	apps      map[string]App
-	servers   []Server
 	templates map[string]*template.Template
 }
 
@@ -26,7 +25,6 @@ func NewCommandCenter(c *Config) *CommandCenter {
 	cc := &CommandCenter{tld: c.Tld, autoStart: c.AutoStart}
 	cc.name = "bam"
 	cc.apps = make(map[string]App)
-	cc.servers = []Server{cc}
 	cc.parseTemplates()
 	cc.loadApps(c)
 	return cc
@@ -91,8 +89,12 @@ func (cc *CommandCenter) actionURL(action, app string) string {
 	return fmt.Sprintf("%s/%s?app=%s", cc.rootURL(), action, app)
 }
 
-func (cc *CommandCenter) List() []Server {
-	return cc.servers
+func (cc *CommandCenter) Get(name string) (Server, bool) {
+	if cc.name == name {
+		return cc, true
+	}
+	app, ok := cc.apps[name]
+	return app, ok
 }
 
 func (cc *CommandCenter) Start() error {
@@ -179,7 +181,6 @@ func (cc *CommandCenter) register(a App) {
 		return
 	}
 	cc.apps[a.Name()] = a
-	cc.servers = append(cc.servers, a)
 }
 
 func (cc *CommandCenter) loadApps(c *Config) {

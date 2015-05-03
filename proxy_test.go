@@ -9,38 +9,6 @@ import (
 	"testing"
 )
 
-func TestMatchDomains(t *testing.T) {
-	data := []struct {
-		domain, subdomain string
-	}{
-		{"acme.local", "acme.local"},
-		{"acme.local", "sub.acme.local"},
-		{"acme.local", "sub.sub.acme.local"},
-	}
-
-	for _, d := range data {
-		if !matchDomains(d.domain, d.subdomain) {
-			t.Errorf("'%s' doesnt match '%s'", d.subdomain, d.domain)
-		}
-	}
-}
-
-func TestMatchXipDomains(t *testing.T) {
-	data := []struct {
-		name, host string
-	}{
-		{"acme", "acme.192.168.1.9.xip.io"},
-		{"acme", "sub.acme.192.168.1.9.xip.io"},
-		{"acme", "sub.sub.acme.192.168.1.9.xip.io"},
-	}
-
-	for _, d := range data {
-		if !matchXipDomain(d.name, d.host) {
-			t.Errorf("'%s' doesnt match '%s'", d.host, d.name)
-		}
-	}
-}
-
 func TestProxyResolve(t *testing.T) {
 	servers := []Server{
 		newServer("godoc", 6060),
@@ -186,16 +154,20 @@ func getServerPort(t *testing.T, baseURL string) int {
 
 type servers struct {
 	server
-	servers []Server
+	servers map[string]Server
 }
 
-func (s *servers) List() []Server {
-	return s.servers
+func (s *servers) Get(name string) (Server, bool) {
+	ss, ok := s.servers[name]
+	return ss, ok
 }
 
 func newServers(ss []Server) Servers {
 	s := &servers{}
-	s.servers = ss
+	s.servers = make(map[string]Server)
+	for _, server := range ss {
+		s.servers[server.Name()] = server
+	}
 	return s
 }
 

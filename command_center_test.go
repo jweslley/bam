@@ -19,10 +19,6 @@ func TestCommandCenter(t *testing.T) {
 		t.Errorf("Application count: got: %d; expected: %d", len(cc.apps), len(apps))
 	}
 
-	if len(cc.List()) != len(apps)+1 {
-		t.Errorf("Server count: got: %d; expected: %d", len(cc.List()), len(apps)+1)
-	}
-
 	for _, name := range apps {
 		app, ok := cc.apps[name]
 		if !ok {
