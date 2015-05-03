@@ -146,20 +146,18 @@ func (cc *CommandCenter) index(w http.ResponseWriter, r *http.Request) {
 }
 
 func (cc *CommandCenter) start(w http.ResponseWriter, r *http.Request) {
-	cc.action(w, r, func(a App) error {
-		log.Printf("Starting app %s\n", a.Name())
+	cc.action(w, r, "starting", func(a App) error {
 		return a.Start()
 	})
 }
 
 func (cc *CommandCenter) stop(w http.ResponseWriter, r *http.Request) {
-	cc.action(w, r, func(a App) error {
-		log.Printf("Stopping app %s\n", a.Name())
+	cc.action(w, r, "stopping", func(a App) error {
 		return a.Stop()
 	})
 }
 
-func (cc *CommandCenter) action(w http.ResponseWriter, r *http.Request, action func(a App) error) {
+func (cc *CommandCenter) action(w http.ResponseWriter, r *http.Request, desc string, action func(a App) error) {
 	name := r.URL.Query().Get("app")
 	app, found := cc.apps[name]
 	if !found {
@@ -167,9 +165,11 @@ func (cc *CommandCenter) action(w http.ResponseWriter, r *http.Request, action f
 		return
 	}
 
+	log.Printf("%s %s\n", desc, name)
 	err := action(app)
 	if err != nil {
-		cc.renderError(w, http.StatusInternalServerError, err)
+		cc.renderError(w, http.StatusInternalServerError,
+			fmt.Errorf("An error occurred while %s %s: %v", desc, name, err))
 	} else {
 		http.Redirect(w, r, "/", http.StatusFound)
 	}
