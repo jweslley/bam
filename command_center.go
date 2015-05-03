@@ -3,6 +3,7 @@ package main
 //go:generate esc -o command_center_assets.go -prefix=public public
 
 import (
+	"bytes"
 	"fmt"
 	"log"
 	"net/http"
@@ -55,9 +56,12 @@ func (cc *CommandCenter) render(w http.ResponseWriter, name string, d data) {
 		return
 	}
 
-	err := t.ExecuteTemplate(w, "root", d)
+	b := &bytes.Buffer{}
+	err := t.ExecuteTemplate(b, "root", d)
 	if err != nil {
 		cc.renderError(w, http.StatusInternalServerError, err)
+	} else {
+		w.Write(b.Bytes())
 	}
 }
 
