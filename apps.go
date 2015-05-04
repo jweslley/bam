@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -21,6 +22,11 @@ type App interface {
 	Running() bool
 }
 
+var (
+	errAlreadyStarted = errors.New("Already started")
+	errNotStarted     = errors.New("Not started")
+)
+
 type processApp struct {
 	server
 	dir       string
@@ -31,7 +37,7 @@ type processApp struct {
 
 func (a *processApp) Start() error {
 	if a.Running() {
-		return fmt.Errorf("bam: %s already started", a.Name())
+		return errAlreadyStarted
 	}
 
 	p, err := a.buildProcess()
@@ -45,7 +51,7 @@ func (a *processApp) Start() error {
 
 func (a *processApp) Stop() error {
 	if !a.Running() {
-		return fmt.Errorf("bam: %s not started", a.Name())
+		return errNotStarted
 	}
 
 	err := a.process.Stop(3 * time.Second) // FIXME magic number
@@ -161,7 +167,7 @@ type webServerApp struct {
 
 func (a *webServerApp) Start() error {
 	if a.Running() {
-		return fmt.Errorf("bam: %s already started", a.Name())
+		return errAlreadyStarted
 	}
 
 	l, err := NewLocalListener()
@@ -188,7 +194,7 @@ func (a *webServerApp) Start() error {
 
 func (a *webServerApp) Stop() error {
 	if !a.Running() {
-		return fmt.Errorf("bam: %s not started", a.Name())
+		return errNotStarted
 	}
 
 	err := a.listener.Close()

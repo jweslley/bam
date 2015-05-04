@@ -22,9 +22,9 @@ type CommandCenter struct {
 	templates map[string]*template.Template
 }
 
-func NewCommandCenter(c *Config) *CommandCenter {
+func NewCommandCenter(name string, c *Config) *CommandCenter {
 	cc := &CommandCenter{tld: c.Tld, autoStart: c.AutoStart}
-	cc.name = "bam"
+	cc.name = name
 	cc.apps = make(map[string]App)
 	cc.parseTemplates()
 	cc.loadApps(c)
@@ -168,6 +168,7 @@ func (cc *CommandCenter) action(w http.ResponseWriter, r *http.Request, desc str
 	log.Printf("%s %s\n", desc, name)
 	err := action(app)
 	if err != nil {
+		log.Printf("ERROR: %s %s: %v\n", desc, name, err)
 		cc.renderError(w, http.StatusInternalServerError,
 			fmt.Errorf("An error occurred while %s %s: %v", desc, name, err))
 	} else {
@@ -177,6 +178,7 @@ func (cc *CommandCenter) action(w http.ResponseWriter, r *http.Request, desc str
 
 func (cc *CommandCenter) notFound(w http.ResponseWriter, r *http.Request) {
 	name := r.URL.Query().Get("app")
+	log.Printf("WARN Application not found: %s\n", name)
 	cc.renderError(w, http.StatusNotFound, fmt.Errorf("Application doesn't exist: %s", name))
 }
 

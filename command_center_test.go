@@ -13,7 +13,7 @@ func TestCommandCenter(t *testing.T) {
 	apps := []string{"fileserver", "ping", "static"}
 	c := &Config{AppsDir: "./examples/", Tld: "app"}
 
-	cc := NewCommandCenter(c)
+	cc := NewCommandCenter("bam", c)
 
 	if len(cc.apps) != len(apps) {
 		t.Errorf("Application count: got: %d; expected: %d", len(cc.apps), len(apps))

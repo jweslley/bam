@@ -11,6 +11,7 @@ import (
 	"github.com/BurntSushi/toml"
 )
 
+const programName = "bam"
 const programVersion = "0.0.1-alpha"
 
 var configTemplates = make(map[string]string)
@@ -54,7 +55,7 @@ func generate(name string, c *Config) {
 }
 
 func usage() {
-	fmt.Fprintf(os.Stderr, "Usage: %s [OPTION]...\n", os.Args[0])
+	fmt.Fprintf(os.Stderr, "Usage: %s [OPTION]...\n", programName)
 	fmt.Fprintf(os.Stderr, "A web server for developers.\n\n")
 	flag.PrintDefaults()
 }
@@ -62,13 +63,13 @@ func usage() {
 func main() {
 	versionFlag := flag.Bool("v", false, "print version information and exit")
 	configFlag := flag.String("config", "", "use a configuration file")
-	generateFlag := flag.String("generate", "", "generate configuration file(s)")
+	generateFlag := flag.String("generate", "", "generate configuration file(s). Use 'bam -generate help' to show generate options.")
 
 	flag.Usage = usage
 	flag.Parse()
 
 	if *versionFlag {
-		fmt.Printf("bam %s\n", programVersion)
+		fmt.Printf("%s %s\n", programName, programVersion)
 		return
 	}
 
@@ -80,9 +81,9 @@ func main() {
 	}
 
 	log.SetPrefix("[bam] ")
-	cc := NewCommandCenter(cfg)
+	cc := NewCommandCenter(programName, cfg)
 	go func() {
-		log.Printf("Starting CommandCenter at http://bam.%s\n", cfg.Tld)
+		log.Printf("Starting CommandCenter at %s\n", cc.rootURL())
 		fail(cc.Start())
 	}()
 

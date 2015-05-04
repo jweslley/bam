@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"net/http"
 	"net/http/httputil"
 	"regexp"
@@ -41,10 +40,9 @@ func NewProxy(tld string, s Servers) *Proxy {
 		if found {
 			req.URL.Host = fmt.Sprint("localhost:", server.Port())
 		} else {
-			log.Printf("WARN No server found for host %s\n", req.Host)
 			req.URL.Host = fmt.Sprint("localhost:", s.Port())
 			req.URL.Path = "/not-found"
-			req.URL.RawQuery = fmt.Sprintf("app=%s", strings.TrimSuffix(req.Host, tld))
+			req.URL.RawQuery = fmt.Sprintf("app=%s", p.serverNameFromHost(req.Host))
 		}
 	}
 	return p
