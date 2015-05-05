@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"path"
 	"path/filepath"
+	"strings"
 	"text/template"
 )
 
@@ -90,7 +91,7 @@ func (cc *CommandCenter) appURL(app string) string {
 }
 
 func (cc *CommandCenter) actionURL(action, app string) string {
-	return fmt.Sprintf("%s/%s?app=%s", cc.rootURL(), action, app)
+	return fmt.Sprintf("%s/apps/%s/%s", cc.rootURL(), app, action)
 }
 
 func (cc *CommandCenter) Get(name string) (Server, bool) {
@@ -131,9 +132,7 @@ func (cc *CommandCenter) startApps() {
 func (cc *CommandCenter) createHandler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", cc.index)
-	mux.HandleFunc("/start", cc.start)
-	mux.HandleFunc("/stop", cc.stop)
-	mux.HandleFunc("/not-found", cc.notFound)
+	mux.HandleFunc("/apps/", cc.appsHandler)
 	mux.Handle("/assets/", http.StripPrefix("/assets/", http.FileServer(FS(false))))
 	return mux
 }
@@ -145,28 +144,49 @@ func (cc *CommandCenter) index(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (cc *CommandCenter) start(w http.ResponseWriter, r *http.Request) {
-	cc.action(w, r, "starting", func(a App) error {
-		return a.Start()
-	})
-}
-
-func (cc *CommandCenter) stop(w http.ResponseWriter, r *http.Request) {
-	cc.action(w, r, "stopping", func(a App) error {
-		return a.Stop()
-	})
-}
-
-func (cc *CommandCenter) action(w http.ResponseWriter, r *http.Request, desc string, action func(a App) error) {
-	name := r.URL.Query().Get("app")
-	app, found := cc.apps[name]
-	if !found {
-		cc.renderError(w, http.StatusNotFound, fmt.Errorf("Application not found: %s", name))
+func (cc *CommandCenter) appsHandler(w http.ResponseWriter, r *http.Request) {
+	parts := strings.Split(r.URL.Path, "/")
+	name := parts[2]
+	if name == "" {
+		http.Redirect(w, r, "/", http.StatusMovedPermanently)
 		return
 	}
 
+	app, found := cc.apps[name]
+	if !found {
+		log.Printf("WARN Application not found: %s\n", name)
+		cc.renderError(w, http.StatusNotFound, fmt.Errorf("Application doesn't exist: %s", name))
+		return
+	}
+
+	var action string
+	if len(parts) > 3 {
+		action = parts[3]
+	}
+
+	switch action {
+	case "start":
+		cc.action(w, r, name, "starting", func() error {
+			return app.Start()
+		})
+
+	case "stop":
+		cc.action(w, r, name, "stopping", func() error {
+			return app.Stop()
+		})
+
+	default:
+		cc.render(w, "app", data{
+			"Title": "BAM!",
+			"App":   app,
+		})
+	}
+}
+
+func (cc *CommandCenter) action(w http.ResponseWriter, r *http.Request,
+	name, desc string, action func() error) {
 	log.Printf("%s %s\n", desc, name)
-	err := action(app)
+	err := action()
 	if err != nil {
 		log.Printf("ERROR: %s %s: %v\n", desc, name, err)
 		cc.renderError(w, http.StatusInternalServerError,
@@ -174,12 +194,6 @@ func (cc *CommandCenter) action(w http.ResponseWriter, r *http.Request, desc str
 	} else {
 		http.Redirect(w, r, "/", http.StatusFound)
 	}
-}
-
-func (cc *CommandCenter) notFound(w http.ResponseWriter, r *http.Request) {
-	name := r.URL.Query().Get("app")
-	log.Printf("WARN Application not found: %s\n", name)
-	cc.renderError(w, http.StatusNotFound, fmt.Errorf("Application doesn't exist: %s", name))
 }
 
 func (cc *CommandCenter) register(a App) {
@@ -261,15 +275,19 @@ var pagesHTML = map[string]string{
 					<li data-app="{{.Name}}" class="red">
 				{{ end }}
 					<a class="title" href="{{ appURL .Name }}">{{.Name}}</a>
-					<span></span>
-					<ul class="actions">
+					<ul class="actions pull-right">
+						<li>
+							<a href="{{ actionURL "" .Name }}" title="Application info">
+								<img src="{{ assetPath "images/info.png" }}">
+							</a>
+						</li>
 						<li>
 							{{ if .Running}}
-								<a href="{{ actionURL "stop" .Name }}">
+								<a href="{{ actionURL "stop" .Name }}" title="Stop">
 									<img src="{{ assetPath "images/stop.png" }}">
 								</a>
 							{{ else }}
-								<a href="{{ actionURL "start" .Name }}">
+								<a href="{{ actionURL "start" .Name }}" title="Start">
 									<img src="{{ assetPath "images/start.png" }}">
 								</a>
 							{{ end }}
@@ -286,5 +304,25 @@ var pagesHTML = map[string]string{
 			<h3>{{.Title}}</h3>
 			{{.Error}}
 		</div>
+	{{ end }}`,
+	"app": `
+	{{ define "body" }}
+		<h1> <a href="{{ rootURL }}">BAM!</a> </h1>
+		{{ if .App.Running }}
+      <div class="status-running">
+        <h2>{{ .App.Name }} is running!</h2>
+      </div>
+      <ul class="actions">
+        <li><a class="action-button" href="{{ appURL .App.Name }}"> Go to appplication </a></li>
+        <li><a class="action-button" href="{{ actionURL "stop" .App.Name }}"> Stop </a></li>
+      </ul>
+		{{ else }}
+      <div class="status-stopped">
+        <h2>{{ .App.Name }} is stopped!</h2>
+      </div>
+      <ul class="actions">
+        <li><a class="action-button" href="{{ actionURL "start" .App.Name }}"> Start </a></li>
+      </ul>
+		{{ end }}
 	{{ end }}`,
 }

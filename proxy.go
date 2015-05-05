@@ -41,8 +41,7 @@ func NewProxy(tld string, s Servers) *Proxy {
 			req.URL.Host = fmt.Sprint("localhost:", server.Port())
 		} else {
 			req.URL.Host = fmt.Sprint("localhost:", s.Port())
-			req.URL.Path = "/not-found"
-			req.URL.RawQuery = fmt.Sprintf("app=%s", p.serverNameFromHost(req.Host))
+			req.URL.Path = fmt.Sprintf("/apps/%s", p.serverNameFromHost(req.Host))
 		}
 	}
 	return p

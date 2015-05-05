@@ -44,7 +44,7 @@ func TestCommandCenter(t *testing.T) {
 	}
 
 	static := cc.apps["static"]
-	res = request(t, "GET", "http://localhost:%d/start?app=%s", cc.Port(), static.Name())
+	res = request(t, "GET", "http://localhost:%d/apps/%s/start", cc.Port(), static.Name())
 	verifyResponse(t, res, http.StatusOK)
 
 	<-time.After(1 * time.Second) // wait for static server to start
@@ -56,7 +56,7 @@ func TestCommandCenter(t *testing.T) {
 	res = request(t, "GET", "http://localhost:%d", static.Port())
 	verifyResponse(t, res, http.StatusOK, "It works!")
 
-	res = request(t, "GET", "http://localhost:%d/stop?app=%s", cc.Port(), static.Name())
+	res = request(t, "GET", "http://localhost:%d/apps/%s/stop", cc.Port(), static.Name())
 	verifyResponse(t, res, http.StatusOK)
 
 	<-time.After(1 * time.Second) // wait for static server to stop
