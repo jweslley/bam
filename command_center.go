@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
 	"path"
 	"path/filepath"
 	"strings"
@@ -17,7 +16,7 @@ import (
 type data map[string]interface{}
 
 type CommandCenter struct {
-	app
+	webApp
 	tld       string
 	autoStart bool
 	apps      map[string]App
@@ -27,6 +26,7 @@ type CommandCenter struct {
 func NewCommandCenter(name string, c *Config) *CommandCenter {
 	cc := &CommandCenter{tld: c.Tld, autoStart: c.AutoStart}
 	cc.name = name
+	cc.handler = cc.createHandler()
 	cc.apps = make(map[string]App)
 	cc.parseTemplates()
 	cc.loadApps(c)
@@ -104,27 +104,12 @@ func (cc *CommandCenter) Get(name string) (App, bool) {
 }
 
 func (cc *CommandCenter) Start() error {
-	port, err := FreePort()
-	if err != nil {
-		return err
-	}
-
-	cc.port = port
 	if cc.autoStart {
 		go func() {
 			cc.startApps()
 		}()
 	}
-	return http.ListenAndServe(fmt.Sprintf(":%d", cc.port), cc.createHandler())
-}
-
-func (cc *CommandCenter) Stop() error {
-	os.Exit(0)
-	return nil
-}
-
-func (cc *CommandCenter) Running() bool {
-	return true
+	return cc.webApp.Start()
 }
 
 func (cc *CommandCenter) startApps() {

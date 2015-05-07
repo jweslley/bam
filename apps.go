@@ -178,13 +178,13 @@ func NewAliasApp(name string, port int) App {
 	return a
 }
 
-type webServerApp struct {
+type webApp struct {
 	app
-	dir      string
+	handler  http.Handler
 	listener net.Listener
 }
 
-func (a *webServerApp) Start() error {
+func (a *webApp) Start() error {
 	if a.Running() {
 		return errAlreadyStarted
 	}
@@ -202,7 +202,7 @@ func (a *webServerApp) Start() error {
 	a.listener = l
 	a.port = port
 
-	s := &http.Server{Handler: http.StripPrefix("/", http.FileServer(http.Dir(a.dir)))}
+	s := &http.Server{Handler: a.handler}
 	go func() {
 		s.Serve(a.listener)
 		a.listener = nil
@@ -211,7 +211,7 @@ func (a *webServerApp) Start() error {
 	return nil
 }
 
-func (a *webServerApp) Stop() error {
+func (a *webApp) Stop() error {
 	if !a.Running() {
 		return errNotStarted
 	}
@@ -221,12 +221,13 @@ func (a *webServerApp) Stop() error {
 	return err
 }
 
-func (a *webServerApp) Running() bool {
+func (a *webApp) Running() bool {
 	return a.listener != nil
 }
 
 func NewWebServerApp(dir string) App {
-	a := &webServerApp{dir: dir}
+	a := &webApp{}
 	a.name = path.Base(dir)
+	a.handler = http.StripPrefix("/", http.FileServer(http.Dir(dir)))
 	return a
 }
