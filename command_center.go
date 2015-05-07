@@ -10,6 +10,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"sync"
 	"text/template"
 )
 
@@ -112,10 +113,26 @@ func (cc *CommandCenter) Start() error {
 	return cc.webApp.Start()
 }
 
+func (cc *CommandCenter) Stop() error {
+	var wg sync.WaitGroup
+	for _, app := range cc.apps {
+		if app.Running() {
+			wg.Add(1)
+			go func(a App) {
+				defer func() { wg.Done() }()
+				log.Printf("stopping %s\n", a.Name())
+				a.Stop()
+			}(app)
+		}
+	}
+	wg.Wait()
+	return cc.webApp.Stop()
+}
+
 func (cc *CommandCenter) startApps() {
 	for _, app := range cc.apps {
 		go func(a App) {
-			log.Printf("Starting app %s\n", a.Name())
+			log.Printf("starting %s\n", a.Name())
 			err := a.Start()
 			if err != nil {
 				log.Printf("Failed to start %s: %s\n", a.Name(), err)

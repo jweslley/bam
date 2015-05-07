@@ -4,8 +4,11 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
+	"os/signal"
+	"sync"
 	"text/template"
 
 	"github.com/BurntSushi/toml"
@@ -87,10 +90,38 @@ func main() {
 		fail(cc.Start())
 	}()
 
-	proxy := NewProxy(cc, cfg.Tld)
 	proxyAddr := fmt.Sprintf(":%d", cfg.ProxyPort)
+	l, err := net.Listen("tcp", proxyAddr)
+	fail(err)
+
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt)
+	forceShutdown := false
+	var gracefulShutdown sync.Once
+	go func() {
+		for sig := range c {
+			if forceShutdown {
+				log.Println("Exiting")
+				os.Exit(1)
+			}
+
+			go gracefulShutdown.Do(func() {
+				log.Printf("%v signal received, stopping applications and exiting.", sig)
+				forceShutdown = true
+
+				log.Printf("stopping CommandCenter")
+				cc.Stop()
+
+				log.Printf("stopping proxy")
+				l.Close()
+			})
+		}
+	}()
+
+	proxy := NewProxy(cc, cfg.Tld)
 	log.Println("Starting Proxy at", proxyAddr)
-	fail(http.ListenAndServe(proxyAddr, proxy))
+	s := http.Server{Handler: proxy}
+	s.Serve(l)
 }
 
 const defaultConfig = `# BAM! configuration file
