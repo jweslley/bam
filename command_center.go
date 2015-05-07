@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"path"
 	"path/filepath"
 	"strings"
@@ -16,7 +17,7 @@ import (
 type data map[string]interface{}
 
 type CommandCenter struct {
-	server
+	app
 	tld       string
 	autoStart bool
 	apps      map[string]App
@@ -94,7 +95,7 @@ func (cc *CommandCenter) actionURL(action, app string) string {
 	return fmt.Sprintf("%s/apps/%s/%s", cc.rootURL(), app, action)
 }
 
-func (cc *CommandCenter) Get(name string) (Server, bool) {
+func (cc *CommandCenter) Get(name string) (App, bool) {
 	if cc.name == name {
 		return cc, true
 	}
@@ -115,6 +116,15 @@ func (cc *CommandCenter) Start() error {
 		}()
 	}
 	return http.ListenAndServe(fmt.Sprintf(":%d", cc.port), cc.createHandler())
+}
+
+func (cc *CommandCenter) Stop() error {
+	os.Exit(0)
+	return nil
+}
+
+func (cc *CommandCenter) Running() bool {
+	return true
 }
 
 func (cc *CommandCenter) startApps() {

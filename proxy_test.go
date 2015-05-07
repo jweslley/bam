@@ -10,21 +10,21 @@ import (
 )
 
 func TestProxyResolve(t *testing.T) {
-	servers := []Server{
-		newServer("godoc", 6060),
-		newServer("goapp", 8080),
-		newServer("btsync", 8888),
+	apps := []App{
+		newApp("godoc", 6060),
+		newApp("goapp", 8080),
+		newApp("btsync", 8888),
 	}
-	p := NewProxy("local", newServers(servers))
+	p := NewProxy(newAppCenter(apps), "local")
 
 	resolveCheck := func(name, host string) {
-		s, ok := p.resolve(host)
+		a, ok := p.resolve(host)
 		if !ok {
 			t.Errorf("cant resolve %s", host)
 		}
 
-		if s.Name() != name {
-			t.Errorf("wrong server. want: %s, got: %s", name, s.Name())
+		if a.Name() != name {
+			t.Errorf("wrong app. want: %s, got: %s", name, a.Name())
 		}
 	}
 
@@ -44,9 +44,9 @@ func TestProxyResolve(t *testing.T) {
 	resolveCheck("btsync", "p.p.btsync.192.20.1.42.xip.io")
 
 	unresolvedCheck := func(host string) {
-		s, ok := p.resolve(host)
+		a, ok := p.resolve(host)
 		if ok {
-			t.Errorf("server '%s' was found for host '%s'", s.Name(), host)
+			t.Errorf("app '%s' was found for host '%s'", a.Name(), host)
 		}
 	}
 
@@ -56,14 +56,14 @@ func TestProxyResolve(t *testing.T) {
 }
 
 func TestProxy(t *testing.T) {
-	servers := []Server{}
+	apps := []App{}
 	createServer := func(name string, status int, content string) *httptest.Server {
 		s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(status)
 			fmt.Fprint(w, content)
 		}))
 		port := getServerPort(t, s.URL)
-		servers = append(servers, newServer(name, port))
+		apps = append(apps, newApp(name, port))
 		return s
 	}
 
@@ -75,7 +75,7 @@ func TestProxy(t *testing.T) {
 	foo := createServer("foo", fooStatus, fooContent)
 	defer foo.Close()
 
-	proxy := httptest.NewServer(NewProxy("local", newServers(servers)))
+	proxy := httptest.NewServer(NewProxy(newAppCenter(apps), "local"))
 	defer proxy.Close()
 
 	requestCheck := func(host string, expectedStatus int, expectedContent string) {
@@ -152,25 +152,36 @@ func getServerPort(t *testing.T, baseURL string) int {
 	return port
 }
 
-type servers struct {
-	server
-	servers map[string]Server
+type fakeApp struct {
+	app
 }
 
-func (s *servers) Get(name string) (Server, bool) {
-	ss, ok := s.servers[name]
-	return ss, ok
+func (a *fakeApp) Start() error  { return nil }
+func (a *fakeApp) Stop() error   { return nil }
+func (a *fakeApp) Running() bool { return true }
+
+type fakeAppCenter struct {
+	fakeApp
+	apps map[string]App
 }
 
-func newServers(ss []Server) Servers {
-	s := &servers{}
-	s.servers = make(map[string]Server)
-	for _, server := range ss {
-		s.servers[server.Name()] = server
+func (ac *fakeAppCenter) Get(name string) (App, bool) {
+	a, ok := ac.apps[name]
+	return a, ok
+}
+
+func newAppCenter(apps []App) AppCenter {
+	ac := &fakeAppCenter{}
+	ac.apps = make(map[string]App)
+	for _, a := range apps {
+		ac.apps[a.Name()] = a
 	}
-	return s
+	return ac
 }
 
-func newServer(name string, port int) Server {
-	return &server{name, port}
+func newApp(name string, port int) App {
+	a := &fakeApp{}
+	a.name = name
+	a.port = port
+	return a
 }

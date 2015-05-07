@@ -13,7 +13,9 @@ import (
 )
 
 type App interface {
-	Server
+	Name() string
+
+	Port() int
 
 	Start() error
 
@@ -27,8 +29,25 @@ var (
 	errNotStarted     = errors.New("Not started")
 )
 
+type app struct {
+	name string
+	port int
+}
+
+func (a *app) Name() string {
+	return a.name
+}
+
+func (a *app) Port() int {
+	return a.port
+}
+
+func (a *app) String() string {
+	return fmt.Sprintf("%s:%d", a.name, a.port)
+}
+
 type processApp struct {
-	server
+	app
 	dir       string
 	env       []string
 	processes map[string]string
@@ -133,7 +152,7 @@ func parseEnv(filepath string) ([]string, error) {
 }
 
 type aliasApp struct {
-	server
+	app
 	running bool
 }
 
@@ -160,7 +179,7 @@ func NewAliasApp(name string, port int) App {
 }
 
 type webServerApp struct {
-	server
+	app
 	dir      string
 	listener net.Listener
 }

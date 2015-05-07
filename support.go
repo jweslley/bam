@@ -35,6 +35,7 @@ func FreePort() (int, error) {
 	return port, nil
 }
 
+// NewLocalListener returns an unused Listener on the local network address.
 func NewLocalListener() (net.Listener, error) {
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {

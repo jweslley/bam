@@ -10,49 +10,45 @@ import (
 
 var xipio = regexp.MustCompile("^(.*?)\\.?\\d+\\.\\d+\\.\\d+\\.\\d+\\.xip\\.io")
 
-// Server is the interface the wraps the Name and Port methods.
-type Server interface {
-	Name() string
+// AppCenter provides a registry of available apps.
+type AppCenter interface {
+	// Port which the AppCenter is binded to.
 	Port() int
-}
 
-// Servers provides a list of available servers.
-type Servers interface {
-	Server
-	Get(string) (Server, bool)
+	// Get searchs for an application by name.
+	Get(string) (App, bool)
 }
 
 // Proxy is a ReverseProxy that takes an incoming request and
-// sends it to one of the known servers based on server's name,
+// sends it to one of the known servers based on app's name,
 // after proxying the response back to the client.
 type Proxy struct {
 	httputil.ReverseProxy
-	servers Servers
-	tld     string
+	ac  AppCenter
+	tld string
 }
 
-// NewProxy returns a new Proxy.
-func NewProxy(tld string, s Servers) *Proxy {
-	p := &Proxy{tld: tld, servers: s}
+func NewProxy(ac AppCenter, tld string) *Proxy {
+	p := &Proxy{ac: ac, tld: tld}
 	p.Director = func(req *http.Request) {
 		req.URL.Scheme = "http"
-		server, found := p.resolve(req.Host)
-		if found {
-			req.URL.Host = fmt.Sprint("localhost:", server.Port())
+		app, found := p.resolve(req.Host)
+		if found && app.Running() {
+			req.URL.Host = fmt.Sprint("localhost:", app.Port())
 		} else {
-			req.URL.Host = fmt.Sprint("localhost:", s.Port())
-			req.URL.Path = fmt.Sprintf("/apps/%s", p.serverNameFromHost(req.Host))
+			req.URL.Host = fmt.Sprint("localhost:", ac.Port())
+			req.URL.Path = fmt.Sprintf("/apps/%s", p.appNameFromHost(req.Host))
 		}
 	}
 	return p
 }
 
-func (p *Proxy) resolve(host string) (Server, bool) {
-	name := p.serverNameFromHost(host)
-	return p.servers.Get(name)
+func (p *Proxy) resolve(host string) (App, bool) {
+	name := p.appNameFromHost(host)
+	return p.ac.Get(name)
 }
 
-func (p *Proxy) serverNameFromHost(host string) string {
+func (p *Proxy) appNameFromHost(host string) string {
 	var prefix string
 	if xipio.MatchString(host) {
 		prefix = xipio.ReplaceAllString(host, "$1")
@@ -61,21 +57,4 @@ func (p *Proxy) serverNameFromHost(host string) string {
 	}
 	t := strings.Split(prefix, ".")
 	return t[len(t)-1]
-}
-
-type server struct {
-	name string
-	port int
-}
-
-func (s *server) Name() string {
-	return s.name
-}
-
-func (s *server) Port() int {
-	return s.port
-}
-
-func (s *server) String() string {
-	return fmt.Sprintf("%s:%d", s.name, s.port)
 }
