@@ -20,7 +20,7 @@ type CommandCenter struct {
 	webApp
 	tld       string
 	autoStart bool
-	apps      map[string]App
+	apps      map[string]*ShareableApp
 	templates map[string]*template.Template
 }
 
@@ -28,7 +28,7 @@ func NewCommandCenter(name string, c *Config) *CommandCenter {
 	cc := &CommandCenter{tld: c.Tld, autoStart: c.AutoStart}
 	cc.name = name
 	cc.handler = cc.createHandler()
-	cc.apps = make(map[string]App)
+	cc.apps = make(map[string]*ShareableApp)
 	cc.parseTemplates()
 	cc.loadApps(c)
 	return cc
@@ -178,14 +178,16 @@ func (cc *CommandCenter) appsHandler(w http.ResponseWriter, r *http.Request) {
 
 	switch action {
 	case "start":
-		cc.action(w, r, name, "starting", func() error {
-			return app.Start()
-		})
+		cc.action(w, r, name, "starting", app.Start)
 
 	case "stop":
-		cc.action(w, r, name, "stopping", func() error {
-			return app.Stop()
-		})
+		cc.action(w, r, name, "stopping", app.Stop)
+
+	case "share":
+		cc.action(w, r, name, "sharing", app.Share)
+
+	case "unshare":
+		cc.action(w, r, name, "unsharing", app.Unshare)
 
 	default:
 		cc.render(w, "app", data{
@@ -212,7 +214,7 @@ func (cc *CommandCenter) register(a App) {
 	if _, ok := cc.apps[a.Name()]; ok {
 		return
 	}
-	cc.apps[a.Name()] = a
+	cc.apps[a.Name()] = &ShareableApp{App: a}
 }
 
 func (cc *CommandCenter) loadApps(c *Config) {
@@ -293,17 +295,30 @@ var pagesHTML = map[string]string{
 								<img src="{{ assetPath "images/info.png" }}">
 							</a>
 						</li>
-						<li>
-							{{ if .Running}}
+						{{ if .Running}}
+							<li>
+								{{ if .Shared }}
+									<a href="{{ .URL }}">
+										<img src="{{ assetPath "images/shared.png" }}">
+									</a>
+								{{ else }}
+									<a href="{{ actionURL "share" .Name }}">
+										<img src="{{ assetPath "images/share.png" }}">
+									</a>
+								{{ end }}
+							</li>
+							<li>
 								<a href="{{ actionURL "stop" .Name }}" title="Stop">
 									<img src="{{ assetPath "images/stop.png" }}">
 								</a>
-							{{ else }}
+							</li>
+						{{ else }}
+							<li>
 								<a href="{{ actionURL "start" .Name }}" title="Start">
 									<img src="{{ assetPath "images/start.png" }}">
 								</a>
-							{{ end }}
-						</li>
+							</li>
+						{{ end }}
 					</ul>
 				</li>
 			{{end}}
@@ -326,6 +341,12 @@ var pagesHTML = map[string]string{
       </div>
       <ul class="actions">
         <li><a class="action-button" href="{{ appURL .App.Name }}"> Go to appplication </a></li>
+				{{ if .App.Shared }}
+					<li><a class="action-button" href="{{ .App.URL }}"> Copy public address </a></li>
+					<li><a class="action-button" href="{{ actionURL "unshare" .App.Name }}"> Unshare </a></li>
+				{{ else }}
+					<li><a class="action-button" href="{{ actionURL "share" .App.Name }}"> Share </a></li>
+				{{ end }}
         <li><a class="action-button" href="{{ actionURL "stop" .App.Name }}"> Stop </a></li>
       </ul>
 		{{ else }}

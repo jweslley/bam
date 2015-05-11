@@ -9,6 +9,7 @@ import (
 	"path"
 	"time"
 
+	"github.com/NoahShen/gotunnelme/src/gotunnelme"
 	"github.com/jweslley/procker"
 )
 
@@ -27,6 +28,7 @@ type App interface {
 var (
 	errAlreadyStarted = errors.New("Already started")
 	errNotStarted     = errors.New("Not started")
+	errAlreadyShared  = errors.New("Already shared")
 )
 
 type app struct {
@@ -230,4 +232,65 @@ func NewWebServerApp(dir string) App {
 	a.name = path.Base(dir)
 	a.handler = http.StripPrefix("/", http.FileServer(http.Dir(dir)))
 	return a
+}
+
+type ShareableApp struct {
+	App
+	url    string
+	tunnel *gotunnelme.Tunnel
+}
+
+func (a *ShareableApp) Stop() error {
+	if a.Shared() {
+		go func() { a.Unshare() }()
+	}
+
+	return a.App.Stop()
+}
+
+func (a *ShareableApp) Share() error {
+	if !a.Running() {
+		return errNotStarted
+	}
+
+	if a.Shared() {
+		return errAlreadyShared
+	}
+
+	tunnel := gotunnelme.NewTunnel()
+	url, err := tunnel.GetUrl("")
+	if err != nil {
+		return err
+	}
+
+	a.url = url
+	a.tunnel = tunnel
+
+	go func() {
+		tunnel.CreateTunnel(a.Port())
+		a.tunnel = nil
+		a.url = ""
+	}()
+
+	return nil
+}
+
+func (a *ShareableApp) Unshare() error {
+	if !a.Running() {
+		return errNotStarted
+	}
+
+	if a.Shared() {
+		a.tunnel.StopTunnel()
+	}
+
+	return nil
+}
+
+func (a *ShareableApp) Shared() bool {
+	return a.tunnel != nil
+}
+
+func (a *ShareableApp) URL() string {
+	return a.url
 }
