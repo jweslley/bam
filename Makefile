@@ -4,6 +4,7 @@ deps:
 	go get github.com/BurntSushi/toml
 	go get github.com/jweslley/procker
 	go get github.com/mjibson/esc
+	go get github.com/NoahShen/gotunnelme
 
 build: deps
 	go build -o ./examples/fileserver/fileserver ./examples/fileserver
