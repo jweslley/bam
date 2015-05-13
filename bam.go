@@ -24,6 +24,7 @@ type Config struct {
 	Tld       string         `toml:"tld"`
 	AutoStart bool           `toml:"auto_start"`
 	ProxyPort int            `toml:"proxy_port"`
+	DNSPort   int            `toml:"dns_port"`
 	Aliases   map[string]int `toml:"aliases"`
 }
 
@@ -85,14 +86,22 @@ func main() {
 
 	log.SetPrefix("[bam] ")
 	cc := NewCommandCenter(programName, cfg)
-	go func() {
-		log.Printf("Starting CommandCenter at %s\n", cc.rootURL())
-		fail(cc.Start())
-	}()
+	log.Printf("Starting CommandCenter at %s\n", cc.rootURL())
+	fail(cc.Start())
 
 	proxyAddr := fmt.Sprintf(":%d", cfg.ProxyPort)
 	l, err := net.Listen("tcp", proxyAddr)
 	fail(err)
+
+	var ldns *LocalDNS
+	if cfg.DNSPort > 0 {
+		ldns = NewLocalDNS(cfg.DNSPort, cfg.Tld)
+	}
+
+	if ldns != nil {
+		log.Printf("Starting DNS at :%d\n", cfg.DNSPort)
+		fail(ldns.Start())
+	}
 
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
@@ -108,6 +117,11 @@ func main() {
 			go gracefulShutdown.Do(func() {
 				log.Printf("%v signal received, stopping applications and exiting.", sig)
 				forceShutdown = true
+
+				if ldns != nil {
+					log.Printf("stopping DNS")
+					ldns.Stop()
+				}
 
 				log.Printf("stopping CommandCenter")
 				cc.Stop()
@@ -137,6 +151,9 @@ auto_start = false
 
 # proxy_port is the port where all :80 connections will be forwarded to before reaching any of the applications.
 proxy_port = 42042
+
+# dns_port is the port to bind the DNS server to. A DNS server will be started only if dns_port is greater than zero.
+# dns_port = 5353
 
 # aliases maps names for local ports used by applications not managed by bam.
 #[aliases]
