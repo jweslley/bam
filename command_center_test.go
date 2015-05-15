@@ -10,7 +10,7 @@ import (
 )
 
 func TestCommandCenter(t *testing.T) {
-	apps := []string{"fileserver", "ping", "static"}
+	apps := []string{"fileserver", "ping", "static", "pyserver"}
 	c := &Config{AppsDir: "./examples/", Tld: "app"}
 
 	cc := NewCommandCenter("bam", c)
