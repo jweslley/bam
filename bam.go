@@ -130,7 +130,7 @@ const defaultConfig = `# BAM! configuration file
 apps_dir = "."
 
 # tld is the top-level domain for local applications.
-tld = "app"
+tld = "dev"
 
 # Automatically starts all applications found on startup if set as true.
 auto_start = false
