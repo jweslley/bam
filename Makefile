@@ -24,14 +24,14 @@ qa: build
 	go tool cover -html=.bam.cover~
 
 dist:
-	packer --os linux  --arch amd64 --output localdns-linux-amd64-$(VERSION).zip
-	rm localdns
-	packer --os linux  --arch 386   --output localdns-linux-386-$(VERSION).zip
-	rm localdns
-	packer --os darwin --arch amd64 --output localdns-mac-amd64-$(VERSION).zip
-	rm localdns
-	packer --os darwin --arch 386   --output localdns-mac-386-$(VERSION).zip
-	rm localdns
+	packer --os linux  --arch amd64 --output bam-linux-amd64-$(VERSION).zip
+	rm bam
+	packer --os linux  --arch 386   --output bam-linux-386-$(VERSION).zip
+	rm bam
+	packer --os darwin --arch amd64 --output bam-mac-amd64-$(VERSION).zip
+	rm bam
+	packer --os darwin --arch 386   --output bam-mac-386-$(VERSION).zip
+	rm bam
 
 server:
 	./bam -config examples/bam.conf
