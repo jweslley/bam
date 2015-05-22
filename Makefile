@@ -1,3 +1,5 @@
+VERSION=0.1.0
+
 all: tests
 
 deps:
@@ -21,8 +23,18 @@ qa: build
 	go test -coverprofile=.bam.cover~
 	go tool cover -html=.bam.cover~
 
+dist:
+	packer --os linux  --arch amd64 --output localdns-linux-amd64-$(VERSION).zip
+	rm localdns
+	packer --os linux  --arch 386   --output localdns-linux-386-$(VERSION).zip
+	rm localdns
+	packer --os darwin --arch amd64 --output localdns-mac-amd64-$(VERSION).zip
+	rm localdns
+	packer --os darwin --arch 386   --output localdns-mac-386-$(VERSION).zip
+	rm localdns
+
 server:
 	./bam -config examples/bam.conf
 
 clean:
-	rm -f ./bam ./examples/fileserver/fileserver ./examples/ping/ping
+	rm -f ./bam ./examples/fileserver/fileserver ./examples/ping/ping *.zip

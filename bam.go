@@ -15,7 +15,7 @@ import (
 )
 
 const programName = "bam"
-const programVersion = "0.0.1-alpha"
+const programVersion = "0.1.0"
 
 var configTemplates = make(map[string]string)
 
