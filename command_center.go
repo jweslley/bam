@@ -97,10 +97,11 @@ func (cc *CommandCenter) actionURL(action, app string) string {
 }
 
 func (cc *CommandCenter) Get(name string) (App, bool) {
-	if cc.name == name {
+	appName := strings.ToLower(name)
+	if cc.name == appName {
 		return cc, true
 	}
-	app, ok := cc.apps[name]
+	app, ok := cc.apps[appName]
 	return app, ok
 }
 
@@ -164,7 +165,7 @@ func (cc *CommandCenter) appsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	app, found := cc.apps[name]
+	app, found := cc.apps[strings.ToLower(name)]
 	if !found {
 		log.Printf("WARN Application not found: %s\n", name)
 		cc.renderError(w, http.StatusNotFound, fmt.Errorf("Application doesn't exist: %s", name))
@@ -211,10 +212,11 @@ func (cc *CommandCenter) action(w http.ResponseWriter, r *http.Request,
 }
 
 func (cc *CommandCenter) register(a App) {
-	if _, ok := cc.apps[a.Name()]; ok {
+	appName := strings.ToLower(a.Name())
+	if _, ok := cc.apps[appName]; ok {
 		return
 	}
-	cc.apps[a.Name()] = &ShareableApp{App: a}
+	cc.apps[appName] = &ShareableApp{App: a}
 }
 
 func (cc *CommandCenter) loadApps(c *Config) {

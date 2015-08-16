@@ -10,7 +10,7 @@ import (
 )
 
 func TestCommandCenter(t *testing.T) {
-	apps := []string{"fileserver", "ping", "static", "pyserver"}
+	apps := []string{"fileserver", "ping", "static", "PyServer"}
 	c := &Config{AppsDir: "./examples/", Tld: "app"}
 
 	cc := NewCommandCenter("bam", c)
@@ -20,7 +20,7 @@ func TestCommandCenter(t *testing.T) {
 	}
 
 	for _, name := range apps {
-		app, ok := cc.apps[name]
+		app, ok := cc.apps[strings.ToLower(name)]
 		if !ok {
 			t.Errorf("Application not loaded: %s", name)
 		}
