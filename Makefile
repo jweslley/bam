@@ -1,10 +1,17 @@
+PROGRAM=bam
 VERSION=0.1.0
+LDFLAGS="-X main.programVersion=$(VERSION)"
 
-all: tests
+all: test
 
 deps:
 	go get ./...
+
+tools:
 	go get github.com/mjibson/esc
+
+server:
+	./bam -config examples/bam.conf
 
 build: deps
 	go build -o ./examples/fileserver/fileserver ./examples/fileserver
@@ -14,27 +21,26 @@ build: deps
 generate:
 	go generate
 
-tests: build
-	go test -v
+test: build
+	go test -v ./...
 
-qa: build
+qa:
 	go vet
 	golint
-	go test -coverprofile=.bam.cover~
-	go tool cover -html=.bam.cover~
+	go test -coverprofile=.cover~
+	go tool cover -html=.cover~
 
 dist:
-	packer --os linux  --arch amd64 --output bam-linux-amd64-$(VERSION).zip
-	rm bam
-	packer --os linux  --arch 386   --output bam-linux-386-$(VERSION).zip
-	rm bam
-	packer --os darwin --arch amd64 --output bam-mac-amd64-$(VERSION).zip
-	rm bam
-	packer --os darwin --arch 386   --output bam-mac-386-$(VERSION).zip
-	rm bam
-
-server:
-	./bam -config examples/bam.conf
+	@for os in linux darwin; do \
+		for arch in 386 amd64; do \
+			target=$(PROGRAM)-$$os-$$arch-$(VERSION); \
+			echo Building $$target; \
+			GOOS=$$os GOARCH=$$arch go build -ldflags $(LDFLAGS) -o $$target/$(PROGRAM) ; \
+			cp ./README.md ./LICENSE $$target; \
+			tar -zcf $$target.tar.gz $$target; \
+			rm -rf $$target;                   \
+		done                                 \
+	done
 
 clean:
-	rm -f ./bam ./examples/fileserver/fileserver ./examples/ping/ping *.zip
+	rm -rf *.tar.gz

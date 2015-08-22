@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"compress/gzip"
+	"encoding/base64"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -11,15 +12,20 @@ import (
 	"time"
 )
 
-type _esc_localFS struct{}
+type _escLocalFS struct{}
 
-var _esc_local _esc_localFS
+var _escLocal _escLocalFS
 
-type _esc_staticFS struct{}
+type _escStaticFS struct{}
 
-var _esc_static _esc_staticFS
+var _escStatic _escStaticFS
 
-type _esc_file struct {
+type _escDir struct {
+	fs   http.FileSystem
+	name string
+}
+
+type _escFile struct {
 	compressed string
 	size       int64
 	local      string
@@ -30,16 +36,16 @@ type _esc_file struct {
 	name string
 }
 
-func (_esc_localFS) Open(name string) (http.File, error) {
-	f, present := _esc_data[path.Clean(name)]
+func (_escLocalFS) Open(name string) (http.File, error) {
+	f, present := _escData[path.Clean(name)]
 	if !present {
 		return nil, os.ErrNotExist
 	}
 	return os.Open(f.local)
 }
 
-func (_esc_staticFS) Open(name string) (http.File, error) {
-	f, present := _esc_data[path.Clean(name)]
+func (_escStaticFS) prepare(name string) (*_escFile, error) {
+	f, present := _escData[path.Clean(name)]
 	if !present {
 		return nil, os.ErrNotExist
 	}
@@ -50,7 +56,8 @@ func (_esc_staticFS) Open(name string) (http.File, error) {
 			return
 		}
 		var gr *gzip.Reader
-		gr, err = gzip.NewReader(bytes.NewBufferString(f.compressed))
+		b64 := base64.NewDecoder(base64.StdEncoding, bytes.NewBufferString(f.compressed))
+		gr, err = gzip.NewReader(b64)
 		if err != nil {
 			return
 		}
@@ -59,53 +66,65 @@ func (_esc_staticFS) Open(name string) (http.File, error) {
 	if err != nil {
 		return nil, err
 	}
-	return f.File()
-}
-
-func (f *_esc_file) File() (http.File, error) {
-	type httpFile struct {
-		*bytes.Reader
-		*_esc_file
-	}
-	return &httpFile{
-		Reader:    bytes.NewReader(f.data),
-		_esc_file: f,
-	}, nil
-}
-
-func (f *_esc_file) Close() error {
-	return nil
-}
-
-func (f *_esc_file) Readdir(count int) ([]os.FileInfo, error) {
-	return nil, nil
-}
-
-func (f *_esc_file) Stat() (os.FileInfo, error) {
 	return f, nil
 }
 
-func (f *_esc_file) Name() string {
+func (fs _escStaticFS) Open(name string) (http.File, error) {
+	f, err := fs.prepare(name)
+	if err != nil {
+		return nil, err
+	}
+	return f.File()
+}
+
+func (dir _escDir) Open(name string) (http.File, error) {
+	return dir.fs.Open(dir.name + name)
+}
+
+func (f *_escFile) File() (http.File, error) {
+	type httpFile struct {
+		*bytes.Reader
+		*_escFile
+	}
+	return &httpFile{
+		Reader:   bytes.NewReader(f.data),
+		_escFile: f,
+	}, nil
+}
+
+func (f *_escFile) Close() error {
+	return nil
+}
+
+func (f *_escFile) Readdir(count int) ([]os.FileInfo, error) {
+	return nil, nil
+}
+
+func (f *_escFile) Stat() (os.FileInfo, error) {
+	return f, nil
+}
+
+func (f *_escFile) Name() string {
 	return f.name
 }
 
-func (f *_esc_file) Size() int64 {
+func (f *_escFile) Size() int64 {
 	return f.size
 }
 
-func (f *_esc_file) Mode() os.FileMode {
+func (f *_escFile) Mode() os.FileMode {
 	return 0
 }
 
-func (f *_esc_file) ModTime() time.Time {
+func (f *_escFile) ModTime() time.Time {
 	return time.Time{}
 }
 
-func (f *_esc_file) IsDir() bool {
+func (f *_escFile) IsDir() bool {
 	return f.isDir
 }
 
-func (f *_esc_file) Sys() interface{} {
+func (f *_escFile) Sys() interface{} {
 	return f
 }
 
@@ -113,90 +132,178 @@ func (f *_esc_file) Sys() interface{} {
 // the filesystem's contents are instead used.
 func FS(useLocal bool) http.FileSystem {
 	if useLocal {
-		return _esc_local
+		return _escLocal
 	}
-	return _esc_static
+	return _escStatic
 }
 
-var _esc_data = map[string]*_esc_file{
+// Dir returns a http.Filesystem for the embedded assets on a given prefix dir.
+// If useLocal is true, the filesystem's contents are instead used.
+func Dir(useLocal bool, name string) http.FileSystem {
+	if useLocal {
+		return _escDir{fs: _escLocal, name: name}
+	}
+	return _escDir{fs: _escStatic, name: name}
+}
+
+// FSByte returns the named file from the embedded assets. If useLocal is
+// true, the filesystem's contents are instead used.
+func FSByte(useLocal bool, name string) ([]byte, error) {
+	if useLocal {
+		f, err := _escLocal.Open(name)
+		if err != nil {
+			return nil, err
+		}
+		return ioutil.ReadAll(f)
+	}
+	f, err := _escStatic.prepare(name)
+	if err != nil {
+		return nil, err
+	}
+	return f.data, nil
+}
+
+// FSMustByte is the same as FSByte, but panics if name is not present.
+func FSMustByte(useLocal bool, name string) []byte {
+	b, err := FSByte(useLocal, name)
+	if err != nil {
+		panic(err)
+	}
+	return b
+}
+
+// FSString is the string version of FSByte.
+func FSString(useLocal bool, name string) (string, error) {
+	b, err := FSByte(useLocal, name)
+	return string(b), err
+}
+
+// FSMustString is the string version of FSMustByte.
+func FSMustString(useLocal bool, name string) string {
+	return string(FSMustByte(useLocal, name))
+}
+
+var _escData = map[string]*_escFile{
 
 	"/bam.css": {
 		local: "public/bam.css",
 		size:  2187,
-		compressed: "\x1f\x8b\b\x00\x00\tn\x88\x00\xff\x94U\xdbN\xeb8\x14}\xefWXT\xf32j\xa2\xa4\xa4-M\xa5\x91\x98^4O\xf3\x0f\xae\xbd\x93Z\xb8vd;@\x0f\xe2ߏ\x1d\xc7I\x9a\x16t\x80\x17\xb2\xbd\xefk\xad\xcd\xdf\xe8c\x82\xd0Q\xbeG\x9a\xfdb\xa2\xcc\xedߊ\x82\x8a\xaci3\xf9\x9c\x1c%\xbdx\x17L^J%kA#" +
-			"\"\xb9T9\x9a\x02)\x92\"\xdd\xd8\xc7B\n\x13\x15\xf8\xcc\xf8%G\x0f\xff\x01\u007f\x05\xc3\bF\xffC\r\x0f\xb3\xee{\xf6\xac\x18\xe63\x8d\x85\x8e4(Vt\xb1\xb68\xe4(ͪ\xa6\xe8)mJ6/o\xc0ʓ\xc9\xd1*IF\xde\xf3x\x01g\xe7>%\u0588\x99\x00Մ\xbd1jN9Z'\u007f\xb9\x803~\x8fZ\xcb" +
-			"j\x91\xb8\xfc\bU\x98R;k\xa4|\xeatqm\xe6P\f\xacg\xacJ&\x82/\xae\x8d\x1cX\xbd\xab7~Nj\xde4\xc0\x99\xb6=\x9a\v\xb7M\n)`\x90;GI\x1f\x9d#[\xc2\x19>'\x9c\xa1\x0f\x14\xf6\x8a1\xde \x97-v\x99\xd0?Ƚ\x0es\xa4ɰ\xb5&ͦA\xd1!g\x9fmV-9\xa3hJ\b" +
-			"\xe9_\"\x85)\xabu\x8e\xda5\x0f\vĥ\x02\x10\xb6\x89\xd6\xd5\x0f\xb6\xe83\xa5\xf8H\xd6d\xdcW|\x01\xce\xe5\xdb7qEJ\xb2\xa4\xb8\x89S@\xbf\t\x82UF\x1eo\x8b\x95\n_\xbe\x89:R\x1b\xb4j\xa301L\n\xddo\x8f2]ql\xf9\xc9\x04g#P\x16\xddBB\x18;\x97C2\xa5K\xbf\xe2WP\x8e\xc8<" +
-			"\u009c\x95v\xf3gF)\a\x17\x8bg\b\xe7\xafL3\xe3&\xb3\xae\x01\xcd$Ye\xbb\xb5\v6\xf0n\"\nD*\xec\x8a\xf4\xe4\xe8\xb5\xe5mHA\x05\xd8 M\x94\xe4\x1c%\xf6\xd7(+\x9a\n+\x10\xa6\xa9\x16\x1bf8\xf42i%\xe1\x041\x12\xce\xc2\v\xc7\xcd\x1c\x9dZ[\x1a\xa7C\xc2\x1f\xa51\xf2ܭ\xa1cCW\xa5" +
-			"\x1b\xa6gA\x8f\xfd\xadW\x8fy\x8b\xf4\xadK\x8fp\xc0\xf5֧\xc73\xaejν\x04\xed{\xc1%\xb6C4\x9f\xeeu\x12\x83R\xb29Y#\x9d\x04a\xdcޮ\xc3|\xb7\xdf\xed\a\xda\b\x0f\xfb\u007f\xb7\xdb]\xb3\x9d`y^gY6\xbf/\xb0+X\xbe\xd2٠\xbd\xd3c\xd3a\x10n2f\xa1\xbf\x06S\rX\x91S7P" +
-			" a\xe2OZ@1[^\xdd-\u007f\x17:\xaa\x0e\xef\xea\x937\x8d8\xf0\xe8~\xbej\xfb\xee9\xd9n\xb7\xa3\xfe\xf2B\x92Z\xb7\xffD\xae\x16\xb9\\>\x1f\xf6\xebf\xfe\x13\xa3p\xadA\xcf|\xfb\xa4\r6\xb5\x8eT-\x84\x1da\x86\x82A\x1bYU\xad\x92n\xf0l\x8fo\xa0\xed<\xf9\xaa\xe1?\x80\xa7\x95e\xabgb=A\xdd" +
-			"\xe9\xecJҭ\n\xee3kw8$\xbb\xa7;\xcc\nQ}\xee\xe1\x90#a\xfc\x90\xb5!\xca\xe6\xf6\x17,:\xd6v9\xe2\x1e}:\x10\x8e\\\x92\x97\x1f\x11\xe8\xea\xb0d\xfe\xb0\xdc[\xdf\x0f(Պ\xdcv\xfe;\x00\x00\xff\xff\xbd\xed\"\x80\x8b\b\x00\x00",
+		compressed: `
+H4sIAAAJbogA/5RV207rOBR971dYVPMyaqKkpC1NpZGYXjRP8w+uvZNauHZkO0AP4t+PHcdJmhZ0gBey
+ve9rrc3f6GOC0FG+R5r9YqLM7d+KgoqsaTP5nBwlvXgXTF5KJWtBIyK5VDmaAimSIt3Yx0IKExX4zPgl
+Rw//AX8FwwhG/0MND7Pue/asGOYzjYWONChWdLG2OOQozaqm6CltSjYvb8DKk8nRKklG3vN4AWfnPiXW
+iJkA1YS9MWpOOVonf7mAM36PWstqkbj8CFWYUjtrpHzqdHFt5lAMrGesSiaCL66NHFi9qzd+TmreNMCZ
+tj2aC7dNCilgkDtHSR+dI1vCGT4nnKEPFPaKMd4gly12mdA/yL0Oc6TJsLUmzaZB0SFnn21WLTmjaEoI
+6V8ihSmrdY7aNQ8LxKUCELaJ1tUPtugzpfhI1mTcV3wBzuXbN3FFSrKkuIlTQL8JglVGHm+LlQpfvok6
+Uhu0aqMwMUwK3W+PMl1xbPnJBGcjUBbdQkIYO5dDMqVLv+JXUI7IPMKclXbzZ0YpBxeLZwjnr0wz4yaz
+rgHNJFllu7ULNvBuIgpEKuyK9OToteVtSEEF2CBNlOQcJfbXKCuaCisQpqkWG2Y49DJpJeEEMRLOwgvH
+zRydWlsap0PCH6Ux8tytoWNDV6UbpmdBj/2tV495i/StS49wwPXWp8czrmrOvQTte8EltkM0n+51EoNS
+sjlZI50EYdzersN8t9/tB9oID/t/t9tds51geV5nWTa/L7ArWL7S2aC902PTYRBuMmahvwZTDViRUzdQ
+IGHiT1pAMVte3S1/FzqqDu/qkzeNOPDofr5q++452W63o/7yQpJat/9Erha5XD4f9utm/hOjcK1Bz3z7
+pA02tY5ULYQdYYaCQRtZVa2SbvBsj2+g7Tz5quE/gKeVZatnYj1B3ensStKtCu4za3c4JLunO8wKUX3u
+4ZAjYfyQtSHK5vYXLDrWdjniHn06EI5ckpcfEejqsGT+sNxb3w8o1Yrcdv47AAD//73tIoCLCAAA
+`,
 	},
 
 	"/bam.js": {
 		local: "public/bam.js",
 		size:  342,
-		compressed: "\x1f\x8b\b\x00\x00\tn\x88\x00\xffL\x90Ao\x02!\x10\x85\xef\xfc\nn\xb0\xb1\x12ﴇ\x9a\xf4Ф\xb7\x1e7{@\x18wI\x10,\fF\xd3\xf8\xdf;\x88\x9a\x9e o\xe6{\xef\xc1\xc9d^\xc0d\xbblә\xbfq\x97l=@D5\x03~\x04h\xd7\xed\xe5\xd3Iїֻt\x16\x83f\r3\xc7c\xf9O\xfcT\xc8" +
-			"\x97o\b`1\xe5\xf7\x10\xa4\b~t\x06͚6\xa7F\xb1}\x8d\x16}\x8a\xf7H9\xf0_\xc6y3\x8b\xc9\xc1\v\x8f\xe6\x00\x9a\x94}\xca\\6\xd9S\xc0F\xd3\xf1z\x8bS\x01\xe2\x8c\v\t\xabUg\xf9\x8d\xa4\xad6\x1e\xfd\xa4\xbbF>\xa4\xb5\x912\x88\xd9\xef*B\x19ţ\x8d\x98\xd4Ʉ\n\xfa\xe9\xa0l0\xa5|\xf9\x82" +
-			"\n\xd3<\a\x90b\xf1\x0eD\xef\xa4\xee}\x9f?\xd5\xf1\x81jm\x86freW\xc6\x1e\x8f\xd2\xec/\x00\x00\xff\xffBS\xf3\x1cV\x01\x00\x00",
+		compressed: `
+H4sIAAAJbogA/0yQQW8CIRCF7/wKbrCxEu+0h5r00KS3Hjd7QBh3SRAsDEbT+N87iJqeIG/me+/ByWRe
+wGS7bNOZv3GXbD1ARDUDfgRo1+3l00nRl9a7dBaDZg0zx2P5T/xUyJdvCGAx5fcQpAh+dAbNmjanRrF9
+jRZ9ivdIOfBfxnkzi8nBC4/mAJqUfcpcNtlTwEbT8XqLUwHijAsJq1Vn+Y2krTYe/aS7Rj6ktZEyiNnv
+KkIZxaONmNTJhAr66aBsMKV8+YIK0zwHkGLxDkTvpO59nz/V8YFqbYZmcmVXxh6P0uwvAAD//0JT8xxW
+AQAA
+`,
 	},
 
 	"/images/info.png": {
 		local: "public/images/info.png",
 		size:  566,
-		compressed: "\x1f\x8b\b\x00\x00\tn\x88\x00\xff\x006\x02\xc9\xfd\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00 \x00\x00\x00 \b\x06\x00\x00\x00szz\xf4\x00\x00\x00\x04sBIT\b\b\b\b|\bd\x88\x00\x00\x00\tpHYs\x00\x00\v\x13\x00\x00\v\x13\x01\x00\x9a\x9c\x18\x00\x00\x01\xd8IDATX\x85\xc5\xd7?k\x14" +
-			"A\x18\x06\xf0߭\a\x9aH\xbc\x0f`\xa5\x9e\xc6BH\xb0\xb2N\xa9\xf6B\xf0\x83\xe4\v\x88\xa7!؊(6\x8aX\x8b\xb1Jia\xe7I\xb4\x8c\x8dH\x88(D\xf2G=A\x8b\xd9#\x9b\xf5r\xb7\xb3\xb7\xe7>\xf0\xc223\xef\xfb\xcc\xccμ\xef3\r\xc5q\nױ\x809\x9c\xc5L\xda\xf7\x1d\x1f\xd1\xc5\x1a^\xa6m\x95`" +
-			"\x16\x8f\xb1\x8f?\x05m\x0f\x8fp~\x1c\xe2i\xac\xe0w\x04q\xdezX\xc6T,\xf9\x05\xbc\x1f\x838o\xef\xd0.J~\x19_*$\xef\xdb\x16括|\x12\xe4\xd9I\x1c\xb9\x13'U\xbb\xed\xc3~\xc7\xc03\xb1R\"\xd8-\xe1j\xbe\x88\xf4\xbb\x9b'\x9f\x15\u007fڟg\xfc\x8f\xe3[\x84oO\xfa+\x924\xc0\x12\x8e\rږ" +
-			"!\xd8\xc9|\xf7\xf03·\x99r\x82\x96\xb8$ӷ\x1fX\xc4\x19\xdc+\xe1\xbf+ͤ\x8b%\x9c\xab\xb2\x1bM!\xb7\xc7\xe0>^\x0fh\xef\xe0td\xac\x85\xa6PXb\xf0\t\xeb\u009d\xfe\x9ci_*1\x819\xf8\xaa\xdc\xf6ur\xc1\xd6K\xc4\xd8J\x1c\x94\xd4:\xd0JF\x8f\x99,\x12\x15\n\x87\x12\xd8N\x04%S\x176" +
-			"\x12AFՅn\"h\xb8\xba\xb0\x96\b\x02r\xbf\x06\xf2=\xac\xf6\x0f\xe1\xb3\x1a&\xf0\x14;\xfdk\xd8\x11\xca\xf1\xffB\x0fw\xf2\x8dˊe\xaf\x9b#\x82?)\x10\xe3v\u007fp#\xe38\x8d7\xb84\x82\xe0\x15>\f鿆\x8bC\xfa\xbb\xb8\"\x94\xf3\u007f\xd0\x16\x8a̤\xca\xef\xa6\xf0\xa2\x1a\x8a\xf9\tMbSD\xe5m\v" +
-			"\xea\xb5*\xf2\xb7EV\x9eǔ\xa0^{c\x10\xff\x12\x0e܉X\xf2,\xdax(h\xb8\xa2Ļx\x80s\xa3\x827F\r\xc8`\x06W\x1d~\x9e\xb7Ҿml8x\x9e\xaf:\xac\x9a\x8f\xc4_U\xb5\xa2\xecS:9\x0f\x00\x00\x00\x00IEND\xaeB`\x82\x01\x00\x00\xff\xffP!\xa0T6\x02\x00\x00",
+		compressed: `
+H4sIAAAJbogA/wA2Asn9iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAABHNCSVQICAgI
+fAhkiAAAAAlwSFlzAAALEwAACxMBAJqcGAAAAdhJREFUWIXF1z9rFEEYBvDfrQeaSLwPYKWexkJIsLJO
+qfZC8IPkC4inIdiKKDaKWIuxSmlh50m0jI1IiChE8kc9QYvZI5v1crezt+c+8MIyM+/7zMzOvO8zDcVx
+CtexgDmcxUza9x0f0cUaXqZtlWAWj7GPPwVtD49wfhziaazgdwRx3npYxlQs+QW8H4M4b+/QLkp+GV8q
+JO/bFuaLrHwS5NlJHLkTJ1W77cN+x8AzsVIi2C3har6I9LubJ58Vf9qfZ/yP41uEb0/6K5I0wBKODdqW
+IdjJfPfwM8K3mXKClrgk07cfWMQZ3CvhvyvNpIslnKuyG00ht8fgPl4PaO/gdGSshaZQWGLwCevCnf6c
+aV8qMYE5+Krc9nVywdZLxNhKHJTUOtBKRo+ZLBIVCocS2E4EJVMXNhJBRtWFbiJouLqwlggCcr8G8j2s
+9g/hsxom8BQ7/WvYEcrx/0IPd/KNy4plr5sjgj8pEON2f3Aj4ziNN7g0guAVPgzpv4aLQ/q7uCKU83/Q
+ForMpMrvpvCiGor5CU1iU0TlbQvqtSryt0VWnseUoF57YxD/Eg7ciVjyLNp4KGi4osS7eIBzo4I3Rg3I
+YAZXHX6et9K+bWw4eJ6vOqyaj8RfVbWi7FM6OQ8AAAAASUVORK5CYIIBAAD//1AhoFQ2AgAA
+`,
 	},
 
 	"/images/share.png": {
 		local: "public/images/share.png",
 		size:  549,
-		compressed: "\x1f\x8b\b\x00\x00\tn\x88\x00\xff\x00%\x02\xda\xfd\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x1c\x00\x00\x00 \b\x06\x00\x00\x00\x01\xb5\x18B\x00\x00\x00\x04sBIT\b\b\b\b|\bd\x88\x00\x00\x00\tpHYs\x00\x00\v\x13\x00\x00\v\x13\x01\x00\x9a\x9c\x18\x00\x00\x01\xc7IDATH\x89\xad\xd7O\x88N" +
-			"Q\x18\xc7\xf1\xcf`\x86\x18f\x92d#\v\x89\xfc)&\xb2#\xb2fagA\x16\xca\xc6VD\x94$e=\x1bVR$E,l\x94\x95B\xa2f1cX\bk\u007f\xa6\xfc+\xf3\xf2Z\x9c{\xeb\xf5z\xcf\xeb\xdc{ϯ\x9en\xdd\xf3\xdc\xe7{\xcfs\x9e\xf3\xdcsɫ\x858\x8di\xb4\xf0\x19\xb7\xb153\a,\xc3\x04\xda=" +
-			"\xac\x85ù\x81\xf7#\xb0\xd2f\xb19\x17l\xcb\u007f`\xa5ݘ\x93\t\xb8+\xd5/\x17p$\xb3__m\xc03i)\x9dj\x02Z\x84KB1\xa4\xc0\xda8W\x17\xb6\x1f\xef+\x80\xdax\x83%UA\xab\xc5˿U\x8c\xb5z\x8cM\x14\xcf\xfe\xa3\xc5\xd8S\xcc`c\xc7\xfd\xf98\x8b\x1f\x11\xd8S\x8c\x15\xbekp\x06\xd70^" +
-			"Ě\xdb\r\x1a\xc4\xc5\x1e\x01\x9f\xe3\b^G@\x9fp\x14\x95\xaa}\x00w\"\x01\xfb\xd9U,\xaf\x02*u\xb0\"h\x12;\xea\x80J=J\x04}\xc5q!\xfd\x8d\xf4%\x11x\xa2)\x88\xb0\xd8\xf3r\x04\xaa\xa2\xc7\xd2f\xf8\x1d\xa70\xd4\x14x(\x11X\xda4v7\x01\x0e\bǀ\xaa\xdb\xe2:Vԅ\x0e\xe2\x02\xbeu\x05}" +
-			"\"\x1c\r^F\xa038\xa6G'Iհ\x90\xae}X\xdbq\u007f\b'{\xbcPgG\xdaV\xf8\xae\xc7y\xdc\xc4\x15\x1c\xd0`+\xad\xc2\xdd\b\xf4\x17\x1e\x14\xd7\xee\xb1)\xa1\xc7\xd6\xd6^\xbc\x8d\x80c\xf6\x0e\xa3us\xff\n\x97\x85}\xbc]\xda\x1a\x8e\xe0wM\xde_Z'\x14WҖ\xaa]]\x1d\xfa\x80\x95ؙ\xe0;\x9c" +
-			"\xeb\xd46\x93\xea\x97\v\xf80\xb3_\x92\xee\xe9\xbf~?\xb1)'p)^D`\xb3\u0087>\xbb\x16\b\x1diR\x98\xd1G\xdc\x12\xfe=\xc0\x1f*\x0e\x14\x01Ɯ[&\x00\x00\x00\x00IEND\xaeB`\x82\x01\x00\x00\xff\xff\x9b \xdbn%\x02\x00\x00",
+		compressed: `
+H4sIAAAJbogA/wAlAtr9iVBORw0KGgoAAAANSUhEUgAAABwAAAAgCAYAAAABtRhCAAAABHNCSVQICAgI
+fAhkiAAAAAlwSFlzAAALEwAACxMBAJqcGAAAAcdJREFUSImt10+ITlEYx/HPYIYYZpJkIwuJ/CkmsiOy
+ZmFnQRbKxlZElCRlPRtWUiRFLGyUlUKiZjFjWAhrf6b8K/PyWpx76/V6z+vce8+vnm7d89zne89znvPc
+c8mrhTiNabTwGbexNTMHLMME2j2shcO5gfcjsNJmsTkXbMt/YKXdmJMJuCvVLxdwJLNfX23AM2kpnWoC
+WoRLQjGkwNo4Vxe2H+8rgNp4gyVVQavFy79VjLV6jE0Uz/6jxdhTzGBjx/35OIsfEdhTjBW+a3AG1zBe
+xJrbDRrExR4Bn+MIXkdAn3AUlap9AHciAfvZVSyvAip1sCJoEjvqgEo9SgR9xXEh/Y30JRF4oimIsNjz
+cgSqosfSZvgdpzDUFHgoEVjaNHY3AQ4Ix4Cq2+I6VtSFDuICvnUFfSIcDV5GoDM4pkcnSdWwkK59WNtx
+fwgne7xQZ0faVviux3ncxBUc0GArrcLdCPQXHhTX7rEpocfW1l68jYBj9g6jdXP/CpeFfbxd2hqO4HdN
+3l9aJxRX0paqXV0d+oCV2JngO5zr1DaT6pcL+DCzX5Lu6b9+P7EpJ3ApXkRgs8KHPrsWCB1pUpjRR9wS
+/j3AHyoOFAHGnFsmAAAAAElFTkSuQmCCAQAA//+bINtuJQIAAA==
+`,
 	},
 
 	"/images/shared.png": {
 		local: "public/images/shared.png",
 		size:  1455,
-		compressed: "\x1f\x8b\b\x00\x00\tn\x88\x00\xff\x00\xaf\x05P\xfa\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00 \x00\x00\x00 \b\x06\x00\x00\x00szz\xf4\x00\x00\x00\x04sBIT\b\b\b\b|\bd\x88\x00\x00\x00\tpHYs\x00\x00\v\x13\x00\x00\v\x13\x01\x00\x9a\x9c\x18\x00\x00\x05QIDATX\x85\xad\x97{lT" +
-			"U\x10\xc6\u007f\xe7ܻ[\xba\xdb\aR\xac\x02\xad\x90\xf2\xd6 \x8f\x06\xb0\x95\x97\x14B-\xa5B\x05\x15C\xa2$\xa2\x04\xa2\xc6(\x11M|\x12\rFQcbbc\x8cQ\x13M\f\x11\xac-\xcfbl\f-\xc5\xe2\v\x15-\xd5\xf2\nB\xb1\xad\xae\xed\xf6\xb1\xf7\x9e\xf1\x8fҥ\xed\xee\x96M\xeb\xf7\xdfΝ\x99\xef;w\xee̜" +
-			"Uĉ9{\xf2S\xb4\xa8B\x05\x8bŨ\xe9\n\xb2\x80d\x00\xb4\x04Ĩ\x06\xa5\xe5\aD\x1dr\xb5)?Z\xb0/\x10O^u5\x87ܽ\xcb&\x8b\xd1[\x8dQ\xf7hͰ\xf8\xe4\x9av#\xfa\x13Dm\xafYQ~rP\x02\xb2K\v}^m\xb6\x19e\x1e\xd5h+>\xe2~2\f\x8e\xd2\xf2&\xad\xfeg\x8fܽ" +
-			"\xb3=n\x01\xb3\xcbo\x9fd\x1b\xb5\v͍\x83!\x8eT\xc2q\xf18\xc5G\xf2\x0f\xd4_U\xc0-\xa5\x85\xb3\x94\xe5\xec\a=\xf2\u007f!\xef\xd1`\xb8\xa4-\xb3\xac\xba`\xdfw1\x05\\\xae\xf7aPi\xff'9\x00\x02n\x9b8\xca\xe3\x14\xd5\x14\x1f\xdc\x1b!\xe0\xe6\xfdK\xfd\xfe.\xcfѡ\xbcv\xad4\xf7f\x15\xb3\"c\x19" +
-			"\xd7xS9\xf1\xcfIJ\xea>\xe0\x97\xe6:\xa4]\xc0\x80\x88\xe9\xd2^\x93Y}\xe7\xc1F\x00\xdd\x13\xecw\xecmC\xad\xf9\x137mb\xd3\xe4\xf5d\xfaG\x93\xe4\xf13{\xe4\fޞ\xb3\x9d\xbc\xb4\x05`\xba}\x94\xd2^#z\u007fX4@Ni\xe1\x14\x83<2\x14\xf21\xbeQ\xdcqC~\x1f\x9b1\x86P\xa7\xc3Ʃ\xf7" +
-			"\xf5\xb1+GϘ\xbb3\xbf ,\x00\xcb}r\xb0\xadփɩ\xe3Q\xbd>)c\f\xc1`\x10c\fI\x96/\xc2_D\xbd\x05\xa0\xb2\x0f.I\xb5;\xbc\x17\xe2\x1f2}\x91`yY3\xae\x88uY\xabI\xf1$\xf7%\x17\x01\xc0\x91\x10\xcb\xf7\xae\x8b\x88\xf5\x88\xf7\x06\xdb\x13\xb2\v\xd5 \xc8meS\x94\xb9\x8c\xf5\x13\xef!" +
-			"-aD\xd8n\x8c\xa1-\x18D.\x93\x03\x1cn\xac\x8d\x9a#d;[m1z\xb1\x8a1\x0f}v\"sGf\xe3\xb3\x139\xder\x823m\xe7\xd0J\xb1t\xf4\"6L\\\xc7h\xdf\xf5W\x92\x99\x10\x9f\x9f\xd9\xc7\xc2\x119$\xa8\x84\xb0\xfd\xb7@=/\x1f{3\xc61d\x89\xad\x95\x99ޫ\x19\u00989b\x1a/\xcdz\x9a" +
-			"\xe1ޔnW\x84=\xe7\x0e15u\"Y\xc9c\xc3~\xae\xb8\x94\x9f\xab\xe0\xfd\xbaO\xb8\xd0\xd4\xc8\x1bR\xc2m\x19\xf3HOL\xa3\xfab-\xa7\x02gc\x90\x03\xae\x9b\xa1r\xbe(hB3\xa2\xb7=\xc9\xf6\xb3\xf3\xb6\xf7\xc25\x8d\xaa\x1d\xe1\xd0\xf9\xafy\xf7\xe4G\x9c\t\x9c\x87\x0e\t\xb7Z\xdc\x10\xc46\x90\xd2\xff\xfc\xb9\xe9\xb3" +
-			"\a$?\xdcx\x94\x92\xba\x0f\xa9\x0f4\x80\v\xb4\vHL\xf7\xd8P([G\tM\xf2\xf8c\xc6\xd4\x05~gK\xed\v\xdd\a0\x02\xc1\xabn\xf4\x81\x04\xa0\xd1\x12qq8\xder\"f̤\x94\xf1\xbc\x92\xfd\fS\x92&@\x10\x06w\xf4\x1e\x18ce\xac\x9d\xb4F)F\xf767w\xb602!\x8d)\xa9\x13\xa2\x86e$\x8e" +
-			"bɵ\v\xb8=s1\xa7Z\xcf\xf1g\xf0\xe2\xe0蕴Z\x99\xf7N\x9c\x83bV\xff\x87U\x8d\xdf\xd0\xd4\xd9L\x92\xed\xa75\xd4\xc6W\x17\xaa\xd8y\xba\x8c\xf1Ic\xb1\x1c\v\x11\xc1g'\x927f>y\x99\v\xf8\xf5\xefz\x9a:\x9a\x99\x966\x95-37\xb3:k\x05\x13R\xc7\xf1}\xd3O8ƍ\xae\xc0\xe2\xa4\xca)" +
-			"+X\x8b\xe2\xe3x\x14\x8b\vv\xa7\xc5c\xd3\x1e\"o\xcc|\x94\xf4\xad\xff\xa5\xae&\xae\xf5\xf6\xdd\xe4]\x12\xe2\xfe/\x1f\xa6\xa9\xb3%2\xa1\x97\xd7T\xee\xee\xa2d\xf1t]\x04\x9d8 \xbb\v\x12\xbcRo\x9f=\x8c'fl&7}v\x9f\x1d\x10\r\rmg\xd8X\xb9\xa5\xdfi\x90\x04\u007f0]W\xad,\xfd\x17Ԁo@" +
-			"\\\xe9\xde\xe7\xbd\x10t:x\xb1v\awU<\xc0\xb7\xcd?\x0ex\xbd\x1d\xebό\xcci\xcbϕE\x95\u007fi\x00\xb1\xdc\xed\xc6\xe0D\x8dv\x81vb~쁮V\x9e:\xf2\x12\x9f\xfeQ\x1aS@\xb4QoY\xf6\x83py\x06\x1f\xc9?P\xaf\x15\xafG\xa8\xecy\xedqtZ\xf9部\x18K\xa5\u007f\x97(\x9bʪ\xe2" +
-			"\xb2\xea\xb0\x00\x00i\xf3=\x8f\xf0c\xd8\xcb\x15\b\xc6\xdf\xe3\x17\x82\x8d\xec={(\xc2\xeebx\xae\xf6\xd5\xf0oѴyӂ\x85a1\xbd\x9ds\xf7\xe4\x8fw]]\xa5\f\xe9t\fn\xbc.\x1a3\x8f\xb5\x13V\x91\xe4\xf1\xd1\x108͎\x1fޡ\xa5\xf3\xefnr\x8c\x1b\xb2\xac[\xbf]\xb3\xa7&\xaa\x00\x80y\xbb\x96gwu" +
-			"85Z\r\xed\x86\xd4\x1f\"\xe2\xea\x04\xb3\xb2\xba\xf8@Yo{Ԣ\xe5~V\x98cB\xa1\nDGޥ\x06\x01\x03\xad\xaeW\xe7\x1d+.?\xda\xffY\xe4E\x00\xa8*.\xabNH\xef\xb8N\xd9T\x0e\x99\xdcKE\xbaϺ.\x1a9\xc4\xf1\xe7t\xee\ue0b9*$%8\xdc|Չ\x13\x86\x88\xb1\xd5\xf7\xca\xd2\x1bjV" +
-			"\x95\x1f\x1b\xc83\xee]:}\xd7\xc2\xe1\x89$>.\xae^.\xe2\x8eõ\x925\xc6\x02\x85\x01\x17\x8b\x80V\xd2 J\x959)\xa17\x8e-\xad\xf8'\x9e\xbc\xff\x01R\x9d\x15\x9e\xd1o\xd2\xe4\x00\x00\x00\x00IEND\xaeB`\x82\x01\x00\x00\xff\xff\x8f\x81&~\xaf\x05\x00\x00",
+		compressed: `
+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
+`,
 	},
 
 	"/images/start.png": {
 		local: "public/images/start.png",
 		size:  334,
-		compressed: "\x1f\x8b\b\x00\x00\tn\x88\x00\xff\xea\f\xf0s\xe7\xe5\x92\xe2b``\xe0\xf5\xf4p\t\x02Ҳ@\xac\xc0\xc1\x06$ߕ\x17\xd7\x00)\x96b'\xcf\x10\x0e \xa8\xe1H\xe9\x00\xf29\v<\"\x8b\x19\x18\xb8\x85A\x98\x91a\xd6\x1c\t\xa0\xe0\aO\x17\xc7\x10\x8fν\xd7\x15u\x8e\x06\x8a\xb0?\xc8OK\x0e\x16\xf1\xbc\x9c\xe1\xb2\xcaG" +
-			"\xed\xf2\xc9\x14\xa3\x99\x0e\x8a\x93\x9f\x8agn\t\x0f\x88\v\xbc\xf7m\xdb\xf6\xed\xda\x05\xe6\xc9r\xcf\xfeץ\xff~\xfa\xfeݻws\xaa+V\x17\x9fἮ\xbc\xeb\xc6\xd1\b!\xdd\xf7\x99\x89\x8a\xbdb_6\xf4\u007fT\x89*n_j\x12uḢ\xda䌳\xcca\x972\x0e2\x1c\x9f\xe1\xb5\xc84wͲ\x8b\xb3\x82}\x96" +
-			"_lJ_\xb3\xfc\xe2,\xef3K.6\xf1\x99]\xce8k\x9av9\xe3 \xf76 \xab\xd7?\xd9\xd8\xf0\x98ֿ\xa5n\xa5{\xa3\x0f\xfb]6\xa9R\xfd1\xc1\xea\xc6\x0f\xcel\xa1\xbd\x029|\xfe\x11\xbf\xb9\xbf\xc5\u007fq\xd9\xf0p;\xab\xfbm\x06\xf7&\xe7?r\xa7}\x13\xf6;\xfe\xb68\xe02\xf9\x81\xc1\x17\xb1n\xdf\xe4\xfb" +
-			"\vm\xdfp\xd6m\x8b\x9e!\xaf\xfaM\xf0m\x92{A\xa3\x95p\x8ch<\xe3\xc6\uf179\xf5\x191\xf2@\xbf3x\xba\xfa\xb9\xacsJh\x02\x04\x00\x00\xff\xffQ\xe2\xc5\x02N\x01\x00\x00",
+		compressed: `
+H4sIAAAJbogA/+oM8HPn5ZLiYmBg4PX0cAkC0rJArMDBBiTflRfXACmWYifPEA4gqOFI6QDyOQs8IosZ
+GLiFQZiRYdYcCaDgB08XxxCPzr3XFXWOBoqwP8hPSw4W8byc4bLKR+3yyRSjmQ6Kk5+KZ24JD4gLvPdt
+2/bt2gXmyXLP/tel/376/t27d3OqK1YXn+G8rrzrxtEIId33mYmKvWJfNvR/VIkqbl9qEnXhuKLa5Iyz
+zGGXMg4yHJ/htcg0d82yi7OCfZZfbEpfs/ziLO8zSy428ZldzjhrmnY54yD3NiCr1z/Z2PCY1r+lbqV7
+ow/7XTapUv0xwerGD85sob0COXz+Eb+5v8V/cdnwcDur+20G9ybnP3KnfRP2O/62OOAy+YHBF7Fu3+T7
+C23fcNZti54hr/pN8G2Se0GjlXCMaDzjxu+FufUZMfJAvzN4uvq5rHNKaAIEAAD//1HixQJOAQAA
+`,
 	},
 
 	"/images/stop.png": {
 		local: "public/images/stop.png",
 		size:  140,
-		compressed: "\x1f\x8b\b\x00\x00\tn\x88\x00\xff\xea\f\xf0s\xe7\xe5\x92\xe2b``\xe0\xf5\xf4p\t\x02\xd2\n \xcc\xc1\x06$\x8b\xab\xaa\xbe\x00)\x96b'\xcf\x10\x0e \xa8\xe1H\xe9\x00\xf29\v<\"\x8b\x19\x18\xb8\x85A\x98\x91a\xd6\x1c\t\xa0\xa0\x9e\xa7\x8bcHD\xeb\xdbs\x86\x8c\f\x06<\r\x06Q\xff\xe7\x99K\xd661\x1a]}\xbda" +
-			"\xef\x1cf\x06\x14\x10R\xab(\xc4h\u007f\xb5\xf3A=\x88\xe7\xe9\xea\xe7\xb2\xce)\xa1\t\x10\x00\x00\xff\xff\xe6\x0e\xb8\x18\x8c\x00\x00\x00",
+		compressed: `
+H4sIAAAJbogA/+oM8HPn5ZLiYmBg4PX0cAkC0gogzMEGJIurqr4AKZZiJ88QDiCo4UjpAPI5CzwiixkY
+uIVBmJFh1hwJoKCep4tjSETr23OGjAwGPA0GUf/nmUvWNjEaXX29Ye8cZgYUEFKrKMRof7XzQT2I5+nq
+57LOKaEJEAAA///mDrgYjAAAAA==
+`,
 	},
 
 	"/": {
