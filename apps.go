@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/user"
 	"path"
 	"time"
 
@@ -54,6 +55,7 @@ type processApp struct {
 	env       []string
 	processes map[string]string
 	process   procker.Process
+	user      *user.User
 }
 
 func (a *processApp) Start() error {
@@ -95,18 +97,19 @@ func (a *processApp) buildProcess() (procker.Process, error) {
 	for name, command := range a.processes {
 		prefix := fmt.Sprintf("[%s:%s] ", a.Name(), name)
 		process := &procker.SysProcess{
-			Command: command,
-			Dir:     a.dir,
-			Env:     append(a.env, fmt.Sprintf("PORT=%d", port)),
-			Stdout:  procker.NewPrefixedWriter(os.Stdout, prefix),
-			Stderr:  procker.NewPrefixedWriter(os.Stderr, prefix),
+			Command:     command,
+			Dir:         a.dir,
+			Env:         append(a.env, fmt.Sprintf("PORT=%d", port)),
+			Stdout:      procker.NewPrefixedWriter(os.Stdout, prefix),
+			Stderr:      procker.NewPrefixedWriter(os.Stderr, prefix),
+			SysProcAttr: sysProcAttrs(a.user),
 		}
 		p = append(p, process)
 	}
 	return procker.NewProcessGroup(p...), nil
 }
 
-func NewProcessApp(procfile string) (App, error) {
+func NewProcessApp(procfile string, u *user.User) (App, error) {
 	processes, err := parseProfile(procfile)
 	if err != nil {
 		return nil, err
@@ -120,7 +123,7 @@ func NewProcessApp(procfile string) (App, error) {
 		env = []string{}
 	}
 
-	a := &processApp{dir: dir, env: env, processes: processes}
+	a := &processApp{dir: dir, env: env, user: u, processes: processes}
 	a.name = name
 	return a, nil
 }

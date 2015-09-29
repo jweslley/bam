@@ -8,23 +8,29 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"os/user"
 	"sync"
-	"text/template"
 
 	"github.com/BurntSushi/toml"
 )
 
-const programName = "bam"
-const programVersion = "0.1.0"
-
-var configTemplates = make(map[string]string)
+var (
+	programName    = "bam"
+	programVersion = "dev"
+)
 
 type Config struct {
 	AppsDir   string         `toml:"apps_dir"`
+	User      string         `toml:"user"`
 	Tld       string         `toml:"tld"`
 	AutoStart bool           `toml:"auto_start"`
 	ProxyPort int            `toml:"proxy_port"`
 	Aliases   map[string]int `toml:"aliases"`
+	user      *user.User
+}
+
+func (c *Config) GetUser() *user.User {
+	return c.user
 }
 
 func parseConfig(file string) *Config {
@@ -38,23 +44,24 @@ func parseConfig(file string) *Config {
 		fail(err)
 	}
 
+	user, err := lookupUser(c.User)
+	fail(err)
+	c.user = user
 	return c
+}
+
+func lookupUser(username string) (*user.User, error) {
+	if username == "" {
+		return nil, nil
+	}
+
+	return user.Lookup(username)
 }
 
 func fail(e error) {
 	if e != nil {
 		log.Fatalln("ERROR ", e)
 	}
-}
-
-func generate(name string, c *Config) {
-	tpl, ok := configTemplates[name]
-	if !ok {
-		fmt.Fprintf(os.Stderr, configTemplates["help"])
-		os.Exit(1)
-	}
-
-	fail(template.Must(template.New(name).Parse(tpl)).Execute(os.Stdout, c))
 }
 
 func usage() {
@@ -65,8 +72,8 @@ func usage() {
 
 func main() {
 	versionFlag := flag.Bool("v", false, "print version information and exit")
+	sampleConfigFlag := flag.Bool("dump-sample-config", false, "print a sample configuration file")
 	configFlag := flag.String("config", "", "use a configuration file")
-	generateFlag := flag.String("generate", "", "generate configuration file(s). Use 'bam -generate help' to show generate options.")
 
 	flag.Usage = usage
 	flag.Parse()
@@ -76,13 +83,12 @@ func main() {
 		return
 	}
 
-	cfg := parseConfig(*configFlag)
-
-	if *generateFlag != "" {
-		generate(*generateFlag, cfg)
+	if *sampleConfigFlag {
+		fmt.Print(defaultConfig)
 		return
 	}
 
+	cfg := parseConfig(*configFlag)
 	log.SetPrefix("[bam] ")
 	cc := NewCommandCenter(programName, cfg)
 	go func() {
@@ -129,14 +135,17 @@ const defaultConfig = `# BAM! configuration file
 # apps_dir is the path where Procfile-based applications will be searched.
 apps_dir = "."
 
+# define the user credentials used by application processes. If empty, application processes run under the same user as bam.
+user = ""
+
 # tld is the top-level domain for local applications.
 tld = "dev"
 
 # Automatically starts all applications found on startup if set as true.
 auto_start = false
 
-# proxy_port is the port where all :80 connections will be forwarded to before reaching any of the applications.
-proxy_port = 42042
+# proxy_port is the port where all connections will be forwarded to before reaching any of the applications.
+proxy_port = 80
 
 # aliases maps names for local ports used by applications not managed by bam.
 #[aliases]

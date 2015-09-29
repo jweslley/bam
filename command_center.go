@@ -80,16 +80,16 @@ func (cc *CommandCenter) renderError(w http.ResponseWriter, status int, e error)
 	}
 }
 
+func (cc *CommandCenter) appURL(app string) string {
+	return fmt.Sprintf("http://%s.%s", app, cc.tld)
+}
+
 func (cc *CommandCenter) rootURL() string {
 	return cc.appURL(cc.name)
 }
 
 func (cc *CommandCenter) assetPath(path string) string {
 	return fmt.Sprintf("%s/assets/%s", cc.rootURL(), path)
-}
-
-func (cc *CommandCenter) appURL(app string) string {
-	return fmt.Sprintf("http://%s.%s", app, cc.tld)
 }
 
 func (cc *CommandCenter) actionURL(action, app string) string {
@@ -220,26 +220,26 @@ func (cc *CommandCenter) register(a App) {
 }
 
 func (cc *CommandCenter) loadApps(c *Config) {
-	cc.loadAliasApps(c.Aliases)
-	cc.loadProcessApps(c.AppsDir)
-	cc.loadWebServerApps(c.AppsDir)
+	cc.loadAliasApps(c)
+	cc.loadProcessApps(c)
+	cc.loadWebServerApps(c)
 }
 
-func (cc *CommandCenter) loadAliasApps(aliases map[string]int) {
-	for name, port := range aliases {
+func (cc *CommandCenter) loadAliasApps(c *Config) {
+	for name, port := range c.Aliases {
 		cc.register(NewAliasApp(name, port))
 	}
 }
 
-func (cc *CommandCenter) loadProcessApps(dir string) {
-	procfiles, err := filepath.Glob(fmt.Sprintf("%s/*/Procfile", dir))
+func (cc *CommandCenter) loadProcessApps(c *Config) {
+	procfiles, err := filepath.Glob(fmt.Sprintf("%s/*/Procfile", c.AppsDir))
 	if err != nil {
-		log.Printf("An error occurred while searching for Procfiles at directory %s: %s\n", dir, err)
+		log.Printf("An error occurred while searching for Procfiles at directory %s: %s\n", c.AppsDir, err)
 		return
 	}
 
 	for _, p := range procfiles {
-		app, err := NewProcessApp(p)
+		app, err := NewProcessApp(p, c.GetUser())
 		if err != nil {
 			log.Printf("Unable to load application %s. Error: %s\n", p, err)
 		} else {
@@ -248,10 +248,10 @@ func (cc *CommandCenter) loadProcessApps(dir string) {
 	}
 }
 
-func (cc *CommandCenter) loadWebServerApps(dir string) {
-	pages, err := filepath.Glob(fmt.Sprintf("%s/*/index.html", dir))
+func (cc *CommandCenter) loadWebServerApps(c *Config) {
+	pages, err := filepath.Glob(fmt.Sprintf("%s/*/index.html", c.AppsDir))
 	if err != nil {
-		log.Printf("An error occurred while searching for index.html at directory %s: %s\n", dir, err)
+		log.Printf("An error occurred while searching for index.html at directory %s: %s\n", c.AppsDir, err)
 		return
 	}
 

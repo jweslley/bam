@@ -12,7 +12,7 @@ func TestApps(t *testing.T) {
 	apps := []App{}
 	procfiles := []string{"./examples/fileserver/Procfile", "./examples/ping/Procfile"}
 	for _, pf := range procfiles {
-		fs, err := NewProcessApp(pf)
+		fs, err := NewProcessApp(pf, nil)
 		if err != nil {
 			t.Errorf("Failed to load procfile %s: %s", pf, err)
 		}
