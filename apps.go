@@ -9,7 +9,7 @@ import (
 	"path"
 	"time"
 
-	"github.com/NoahShen/gotunnelme/src/gotunnelme"
+	"github.com/jweslley/localtunnel"
 	"github.com/jweslley/procker"
 )
 
@@ -236,8 +236,7 @@ func NewWebServerApp(dir string) App {
 
 type ShareableApp struct {
 	App
-	url    string
-	tunnel *gotunnelme.Tunnel
+	tunnel *localtunnel.Tunnel
 }
 
 func (a *ShareableApp) Stop() error {
@@ -257,19 +256,17 @@ func (a *ShareableApp) Share() error {
 		return errAlreadyShared
 	}
 
-	tunnel := gotunnelme.NewTunnel()
-	url, err := tunnel.GetUrl("")
+	tunnel := localtunnel.DefaultClient.NewLocalTunnel(a.Port())
+	err := tunnel.Open()
 	if err != nil {
 		return err
 	}
 
-	a.url = url
 	a.tunnel = tunnel
 
 	go func() {
-		tunnel.CreateTunnel(a.Port())
+		<-tunnel.Closing()
 		a.tunnel = nil
-		a.url = ""
 	}()
 
 	return nil
@@ -281,7 +278,7 @@ func (a *ShareableApp) Unshare() error {
 	}
 
 	if a.Shared() {
-		a.tunnel.StopTunnel()
+		a.tunnel.Close()
 	}
 
 	return nil
@@ -292,5 +289,8 @@ func (a *ShareableApp) Shared() bool {
 }
 
 func (a *ShareableApp) URL() string {
-	return a.url
+	if a.tunnel == nil {
+		return ""
+	}
+	return a.tunnel.URL()
 }
